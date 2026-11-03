@@ -1,0 +1,357 @@
+using System;
+using Microsoft.Xna.Framework;
+using Terraria;
+using Terraria.Audio;
+using Terraria.GameInput;
+using Terraria.ID;
+using Terraria.ModLoader;
+using Terraria.ModLoader.IO;
+using SpectesGaze.Content.Buffs;
+
+namespace SpectesGaze.Content.Players
+{
+	/// <summary>
+	/// 鬼眼的全部运行时状态。
+	/// 为什么不用饰品槽：改 Player.armor 数组要 patch 原版 UI 和存档，和别的 mod 冲突概率高。
+	/// 这里用"使用后固化"代替，状态存玩家数据里，UI 单独画一个格子显示。
+	/// </summary>
+	public class GhosteyePlayer : ModPlayer
+	{
+		// ================= 装备状态 =================
+
+		/// <summary>是否已经吞噬鬼眼。一旦为 true 永久锁死，没有取下逻辑。</summary>
+		public bool Equipped;
+
+		// ================= 复苏值 =================
+
+		public const float MaxRevival = 100f;
+
+		/// <summary>0 ~ 100。越高输出越高，同时受到的伤害也越高。只涨不跌，升层时清零。</summary>
+		public float Revival;
+
+		/// <summary>输出加成比例，满值 +60%。</summary>
+		public float RevivalDamageBonus => 0.6f * (Revival / MaxRevival);
+
+		/// <summary>受伤加成比例，满值 +50%。</summary>
+		public float RevivalHurtBonus => 0.5f * (Revival / MaxRevival);
+
+		// ================= 鬼域状态 =================
+
+		/// <summary>
+		/// 鬼域开关。按一次开，再按一次关，没有持续时间限制。
+		/// 用 bool 字段而不是循环：游戏每帧调用一次 Update，读字段就够，
+		/// 写 while 循环会把主线程卡死。
+		/// </summary>
+		public bool DomainOn;
+
+		/// <summary>鬼域锁定剩余时间（帧）。只在复苏值溢满被迫闭眼时启用。</summary>
+		public int DomainCooldown;
+
+		/// <summary>兼容旧名字，UI 和渲染器都读这个。</summary>
+		public bool DomainActive => DomainOn;
+
+		// 记录上一帧的层数，用来检测"升层"事件。
+		private int lastTier;
+
+		/// <summary>
+		/// 每一层对应的鬼域半径（像素）。16 像素 = 1 格。
+		/// 20 / 30 / 40 / 60 / 80 / 100 格直径，第 6 层封顶，之后不再变大。
+		/// 400 格直径是没实测拍脑袋定的，屏幕根本装不下，已按实测改成 100 格。
+		/// </summary>
+		private static readonly float[] RadiusByTier =
+		{
+			160f, 240f, 320f, 480f, 640f, 800f, 800f, 800f, 800f, 800f
+		};
+
+		public static float DomainRadiusOf(int tier)
+		{
+			return RadiusByTier[Math.Clamp(tier - 1, 0, RadiusByTier.Length - 1)];
+		}
+
+		/// <summary>鬼域开着时每秒涨多少复苏值。</summary>
+		private const float RevivalDrainPerTick = 0.025f;
+
+		// ================= 装备流程 =================
+
+		/// <summary>物品被使用时调用，完成"吞噬"。</summary>
+		public void Equip()
+		{
+			if (Equipped) return;
+
+			Equipped = true;
+			Revival = 0f;
+
+			// 首次佩戴强制扣掉当前血量的 80%，至少保留 1 点，避免装备即死。
+			int loss = (int)(Player.statLife * 0.8f);
+			Player.statLife = Math.Max(1, Player.statLife - loss);
+			Player.HealEffect(-loss, true);
+
+			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.8f, Pitch = -0.6f }, Player.Center);
+
+			if (Main.netMode != NetmodeID.Server)
+			{
+				for (int i = 0; i < 40; i++)
+				{
+					Vector2 vel = Main.rand.NextVector2Circular(6f, 6f);
+					Dust d = Dust.NewDustDirect(Player.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.6f);
+					d.noGravity = true;
+				}
+			}
+		}
+
+		// ================= 每帧更新 =================
+
+		public override void PostUpdate()
+		{
+			if (!Equipped) return;
+
+			if (DomainCooldown > 0) DomainCooldown--;
+
+			// 鬼域开启期间：每帧续一次 buff 保持常驻，同时复苏值持续上涨。
+			if (DomainOn)
+			{
+				Player.AddBuff(ModContent.BuffType<GazeDomain>(), 2);
+
+				Revival = Math.Min(MaxRevival, Revival + RevivalDrainPerTick);
+
+				// 复苏值溢满，鬼眼被迫闭合，进入锁定。
+				if (Revival >= MaxRevival)
+				{
+					CloseDomain(true);
+				}
+			}
+
+			// 检测升层：每提升一层，把上一级积累的复苏值清零。
+			int tier = CalculateTier();
+			if (tier > lastTier)
+			{
+				Revival = 0f;
+				if (Main.netMode != NetmodeID.Server && Player.whoAmI == Main.myPlayer)
+				{
+					Main.NewText($"鬼眼已成长至第 {tier} 层", 200, 60, 60);
+				}
+			}
+			lastTier = tier;
+
+			// 右键瞬移。只在本地玩家身上处理。
+			if (DomainOn && Player.whoAmI == Main.myPlayer && Main.mouseRight && Main.mouseRightRelease)
+			{
+				TryTeleport();
+			}
+		}
+
+		public override void PostUpdateEquips()
+		{
+			if (!Equipped) return;
+
+			int tier = CalculateTier();
+
+			// 被动：每层 +2% 伤害、+1 防御。
+			Player.GetDamage(DamageClass.Generic) += 0.02f * tier;
+			Player.statDefense += tier;
+
+			// 复苏值带来的输出加成。
+			Player.GetDamage(DamageClass.Generic) += RevivalDamageBonus;
+
+			// 第三层起获得"看见灵异"：透视敌人，等同于猎人药水。
+			if (tier >= 3)
+			{
+				Player.detectCreature = true;
+			}
+		}
+
+		/// <summary>
+		/// 复苏值的代价：受伤倍率。
+		/// 1.4.4 的新伤害管线，FinalDamage 是最终的乘法修正。
+		/// </summary>
+		public override void ModifyHurt(ref Player.HurtModifiers modifiers)
+		{
+			if (!Equipped) return;
+			modifiers.FinalDamage *= 1f + RevivalHurtBonus;
+		}
+
+		// ================= 击中判定 =================
+
+		public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
+		{
+			TryApplySlow(target);
+		}
+
+		public override void OnHitNPCWithProj(Projectile proj, NPC target, NPC.HitInfo hit, int damageDone)
+		{
+			TryApplySlow(target);
+		}
+
+		private void TryApplySlow(NPC target)
+		{
+			// 只在鬼域开启时生效，5% 概率。
+			if (!Equipped || !DomainOn) return;
+			if (Main.netMode == NetmodeID.Server) return;
+			if (Main.rand.NextFloat() >= 0.05f) return;
+
+			target.AddBuff(ModContent.BuffType<EyeSlow>(), 180);
+		}
+
+		// ================= 主动技能 =================
+
+		public override void ProcessTriggers(TriggersSet triggersSet)
+		{
+			if (Player.whoAmI != Main.myPlayer) return;
+			if (SpectesGaze.GazeKey == null || !SpectesGaze.GazeKey.JustPressed) return;
+			if (!Equipped) return;
+
+			// 一个键既是开也是关。
+			if (DomainOn)
+			{
+				CloseDomain(false);
+			}
+			else
+			{
+				TryOpenDomain();
+			}
+		}
+
+		private void TryOpenDomain()
+		{
+			if (DomainCooldown > 0)
+			{
+				Main.NewText($"鬼眼还在闭合状态，{DomainCooldown / 60 + 1} 秒后才能睁开。", 160, 60, 60);
+				return;
+			}
+
+			// 复苏值已经满了就不让开，否则开出来下一帧就会被强制闭合。
+			if (Revival >= MaxRevival)
+			{
+				Main.NewText("复苏值已满，鬼眼拒绝睁开。", 160, 60, 60);
+				return;
+			}
+
+			DomainOn = true;
+			Revival = Math.Min(MaxRevival, Revival + 10f);
+
+			// 开启瞬间：范围内所有敌人挂上凝视。
+			int tier = CalculateTier();
+			float radius = DomainRadiusOf(tier);
+
+			for (int i = 0; i < Main.maxNPCs; i++)
+			{
+				NPC npc = Main.npc[i];
+				if (!npc.active || npc.friendly || npc.immortal || npc.dontTakeDamage) continue;
+				if (Vector2.DistanceSquared(npc.Center, Player.Center) > radius * radius) continue;
+
+				npc.AddBuff(ModContent.BuffType<GhastlyGaze>(), 300);
+
+				if (Main.netMode != NetmodeID.Server)
+				{
+					SpawnGazeLine(Player.Center, npc.Center);
+				}
+			}
+
+			SoundEngine.PlaySound(SoundID.Item14 with { Volume = 0.6f, Pitch = -0.5f }, Player.Center);
+		}
+
+		private void CloseDomain(bool overflowed)
+		{
+			DomainOn = false;
+
+			if (overflowed)
+			{
+				// 复苏值溢满导致的强制闭合，要锁一段时间。
+				DomainCooldown = 60 * 30;
+
+				// 关键：必须回落到一个安全值，否则玩家重新开域时复苏值仍是 100，
+				// 下一帧立刻又溢满、又强制闭合，会卡死在"永远开不了"的状态。
+				// 回落不算"自动下降"，这是鬼眼强行闭眼的代价。
+				Revival = 60f;
+
+				if (Player.whoAmI == Main.myPlayer)
+				{
+					Main.NewText("复苏值溢满，鬼眼强行闭合。", 200, 40, 40);
+				}
+
+				SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.7f, Pitch = 0.3f }, Player.Center);
+			}
+		}
+
+		private void TryTeleport()
+		{
+			Vector2 target = Main.MouseWorld;
+			int tier = CalculateTier();
+			float radius = DomainRadiusOf(tier);
+
+			// 目标点必须在鬼域范围内。
+			if (Vector2.Distance(target, Player.Center) > radius) return;
+
+			Vector2 checkPos = target - Player.Size / 2f;
+
+			// 落点不能卡在实体方块里。
+			if (Collision.SolidCollision(checkPos, Player.width, Player.height)) return;
+
+			// 视线要通，防止隔着墙瞬移。
+			if (!Collision.CanHitLine(Player.Center, 1, 1, target, 1, 1)) return;
+
+			if (Main.netMode != NetmodeID.Server)
+			{
+				for (int i = 0; i < 16; i++)
+				{
+					Vector2 vel = Main.rand.NextVector2Circular(4f, 4f);
+					Dust d = Dust.NewDustDirect(Player.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.3f);
+					d.noGravity = true;
+				}
+			}
+
+			Player.Teleport(checkPos, 1);
+			Player.velocity = Vector2.Zero;
+			Revival = Math.Min(MaxRevival, Revival + 3f);
+		}
+
+		private static void SpawnGazeLine(Vector2 from, Vector2 to)
+		{
+			int steps = 12;
+			for (int i = 0; i < steps; i++)
+			{
+				Vector2 pos = Vector2.Lerp(from, to, i / (float)steps);
+				Dust d = Dust.NewDustDirect(pos, 1, 1, DustID.Blood, 0f, 0f, 0, default, 1.1f);
+				d.noGravity = true;
+				d.velocity *= 0.2f;
+			}
+		}
+
+		// ================= 层数判定 =================
+
+		/// <summary>
+		/// 按主线进度换算层数。十个节点对十层，和小说顺序一致。
+		/// 从高到低判断，命中即返回。
+		/// 灾厄 DLC 之后会用另一套进度覆盖这里，所以全项目只有这一个入口。
+		/// </summary>
+		public static int CalculateTier()
+		{
+			if (NPC.downedMoonlord) return 10;
+			if (NPC.downedTowerSolar && NPC.downedTowerNebula && NPC.downedTowerVortex && NPC.downedTowerStardust) return 9;
+			if (NPC.downedAncientCultist) return 8;
+			if (NPC.downedFishron) return 7;
+			if (NPC.downedGolemBoss) return 6;
+			if (NPC.downedPlantBoss) return 5;
+			if (NPC.downedMechBossAny) return 4;
+			if (Main.hardMode) return 3;
+			if (NPC.downedBoss1 || NPC.downedBoss2 || NPC.downedBoss3 || NPC.downedSlimeKing) return 2;
+			return 1;
+		}
+
+		// ================= 存档 =================
+
+		public override void SaveData(TagCompound tag)
+		{
+			tag["equipped"] = Equipped;
+			tag["revival"] = Revival;
+			tag["lastTier"] = lastTier;
+		}
+
+		public override void LoadData(TagCompound tag)
+		{
+			Equipped = tag.GetBool("equipped");
+			Revival = tag.GetFloat("revival");
+			lastTier = tag.GetInt("lastTier");
+		}
+	}
+}

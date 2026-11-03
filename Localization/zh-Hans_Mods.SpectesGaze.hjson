@@ -1,0 +1,32 @@
+# This file will automatically update with entries for new content after a build and reload.
+# Please read https://github.com/tModLoader/tModLoader/wiki/Localization to learn more about localization and these files.
+
+Items: {
+	Ghosteye: {
+		DisplayName: 鬼眼
+		Tooltip:
+			'''
+			一只在后脑回望你的眼睛。
+			它记得你杀过的每一样东西。
+			'''
+	}
+}
+
+Buffs: {
+	GazeDomain: {
+		DisplayName: 鬼域
+		Description: 鬼眼睁开，世界向你俯首。
+	}
+
+	GhastlyGaze: {
+		DisplayName: 凝视
+		Description: 被它看见的东西，正在腐朽。
+	}
+
+	EyeSlow: {
+		DisplayName: 迟缓
+		Description: 被鬼眼看见的东西，动作变慢了。
+	}
+}
+
+Keybinds.OpenDomain.DisplayName: 睁开鬼眼

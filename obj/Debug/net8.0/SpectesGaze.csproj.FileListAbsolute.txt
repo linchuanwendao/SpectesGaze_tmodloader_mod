@@ -1,0 +1,13 @@
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.csproj.AssemblyReference.cache
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.AssemblyInfoInputs.cache
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.AssemblyInfo.cs
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.csproj.CoreCompileInputs.cache
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\bin\Debug\net8.0\SpectesGaze.deps.json
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\bin\Debug\net8.0\SpectesGaze.dll
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\bin\Debug\net8.0\SpectesGaze.pdb
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.dll
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\refint\SpectesGaze.dll
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.pdb
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\ref\SpectesGaze.dll
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesG.50375846.Up2Date
