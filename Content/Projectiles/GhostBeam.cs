@@ -21,8 +21,8 @@ namespace SpectesGaze.Content.Projectiles
 		/// <summary>光束最大长度。</summary>
 		public const float MaxLength = 1600f;
 
-		/// <summary>光束视觉厚度，也是伤害判定的宽容范围。</summary>
-		public const float Thickness = 150f;
+		/// <summary>光束视觉厚度，也是伤害判定的宽容范围。想让激光更粗就改这个数。</summary>
+		public const float Thickness = 80f;
 
 		/// <summary>持续帧数。90 帧 = 1.5 秒。</summary>
 		public const int Duration = 90;
@@ -117,39 +117,15 @@ namespace SpectesGaze.Content.Projectiles
 			}
 		}
 
+		/// <summary>
+		/// 弹幕自己不做绘制。
+		/// 实测 Projectile.PreDraw 这条路画不出来（有伤害但看不到光束），
+		/// 改由 DomainRenderer 在 PostDrawTiles 里统一画，那条路径已验证可靠。
+		/// 返回 false 只是阻止默认贴图绘制，实际画面由渲染器负责。
+		/// </summary>
 		public override bool PreDraw(ref Color lightColor)
 		{
-			Texture2D tex = ModContent.Request<Texture2D>(Texture).Value;
-
-			Vector2 aim = Projectile.velocity.SafeNormalize(Vector2.UnitX);
-			Vector2 start = Projectile.Center;
-			float length = Projectile.ai[0] <= 0f ? MaxLength : Projectile.ai[0];
-
-			// 快频闪烁，看起来像在烧。
-			float flicker = 0.82f + 0.18f * (float)Math.Sin(Main.GlobalTimeWrappedHourly * 40f);
-
-			// 前 6 帧和后 6 帧做淡入淡出，避免硬切。
-			float fade = 1f;
-			float t = Projectile.ai[1];
-			if (t < 6f) fade = t / 6f;
-			else if (t > Duration - 6f) fade = Math.Max(0f, (Duration - t) / 6f);
-
-			// 贴图左边缘中点做原点，旋转后从左端伸出去。
-			Vector2 origin = new Vector2(0f, tex.Height / 2f);
-			float rot = aim.ToRotation();
-
-			// 三层叠加：外层宽而淡，内层窄而亮，模拟发光。
-			DrawLayer(tex, start, origin, rot, length, Thickness * 1.7f, new Color(110, 8, 18) * (0.5f * flicker * fade));
-			DrawLayer(tex, start, origin, rot, length, Thickness, new Color(215, 45, 55) * (0.78f * flicker * fade));
-			DrawLayer(tex, start, origin, rot, length, Thickness * 0.36f, new Color(255, 205, 205) * (0.9f * flicker * fade));
-
 			return false;
-		}
-
-		private static void DrawLayer(Texture2D tex, Vector2 start, Vector2 origin, float rot, float length, float thickness, Color color)
-		{
-			Vector2 scale = new Vector2(length / tex.Width, thickness / tex.Height);
-			Main.spriteBatch.Draw(tex, start, null, color, rot, origin, scale, SpriteEffects.None, 0f);
 		}
 	}
 }

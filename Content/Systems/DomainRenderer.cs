@@ -5,26 +5,25 @@ using Terraria;
 using Terraria.GameContent;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Players;
+using SpectesGaze.Content.Projectiles;
 
 namespace SpectesGaze.Content.Systems
 {
 	/// <summary>
-	/// 鬼域范围的可视化。
+	/// 鬼域和鬼眼激光的可视化，统一在这里画。
 	///
-	/// 坐标系踩了四次坑，结论记在这里，别再改回去了：
-	/// 1. PostDrawTiles 阶段传给 Begin 的自定义矩阵不可靠，用 Main.GameViewMatrix.TransformationMatrix
-	///    画出来会跑到屏幕外（世界坐标 67054 这种数字直接当屏幕坐标用）。
-	/// 2. 所以矩阵一律用默认（Identity），坐标自己换算：世界坐标 - Main.screenPosition。
-	///    实测玩家中心 67054,6571 减屏幕偏移 66094,6031 得到 960,540，正好是 1920x1080 的正中，公式成立。
-	/// 3. PostDrawInterface 阶段不能这么算，那个阶段 screenPosition 已经被改过。
-	/// 4. 不要用几十个旋转矩形拼圆，会变成放射状光条。用预渲染贴图缩放。
+	/// 坐标系结论（试错五次后确认）：
+	/// - 位置：PostDrawTiles，先 try End 掉现有批次，再 Begin 一个不带矩阵的新批次，
+	///   坐标自己换算成屏幕坐标（世界坐标 - Main.screenPosition）。
+	/// - 不要给 Begin 传 TransformationMatrix，那样世界坐标会被当成屏幕坐标用，画到屏幕外。
+	/// - 不要在 PostDrawInterface 里算世界坐标，那个阶段 screenPosition 已经不可靠。
+	/// - 弹幕的 PreDraw 这条路过不通（实测有伤害但画不出来），所以激光也挪到这里画。
 	/// </summary>
 	public class DomainRenderer : ModSystem
 	{
 		/// <summary>圆环贴图里那个环的半径，单位像素。缩放时用它做基准。</summary>
 		private const float TextureRingRadius = 500f;
 
-		// 渲染异常只报一次，避免每帧刷屏。
 		private static bool _reportedError;
 
 		public override void PostDrawTiles()
@@ -32,30 +31,17 @@ namespace SpectesGaze.Content.Systems
 			if (Main.dedServ) return;
 
 			Player player = Main.LocalPlayer;
-			if (player == null || !player.active) return;
+			GhosteyePlayer mp = player?.GetModPlayer<GhosteyePlayer>();
 
-			GhosteyePlayer mp = player.GetModPlayer<GhosteyePlayer>();
-			if (!mp.Equipped || !mp.DomainOn) return;
+			bool hasDomain = player != null && player.active && mp != null && mp.Equipped && mp.DomainOn;
+			bool hasBeam = AnyBeamActive();
 
-			int tier = GhosteyePlayer.CalculateTier();
-			float radius = GhosteyePlayer.DomainRadiusOf(tier);
-
-			// 世界坐标转屏幕坐标。这个阶段 screenPosition 是可靠的。
-			Vector2 screenCenter = player.Center - Main.screenPosition;
-
-			Texture2D ring = ModContent.Request<Texture2D>("SpectesGaze/Content/Textures/Effects/DomainRing").Value;
-			Texture2D core = ModContent.Request<Texture2D>("SpectesGaze/Content/Textures/Effects/DomainCore").Value;
-
-			float pulse = 0.5f + 0.5f * (float)Math.Sin(Main.GlobalTimeWrappedHourly * 2.2f);
-			float intensity = 0.62f + 0.26f * pulse;
-			float ringScale = radius / TextureRingRadius;
+			if (!hasDomain && !hasBeam) return;
 
 			try
 			{
-				// 原批次状态不确定，先关；关不掉说明本来就是关的，忽略。
 				try { Main.spriteBatch.End(); } catch { }
 
-				// 默认矩阵，坐标即屏幕像素。
 				Main.spriteBatch.Begin(
 					SpriteSortMode.Deferred,
 					BlendState.AlphaBlend,
@@ -63,49 +49,8 @@ namespace SpectesGaze.Content.Systems
 					DepthStencilState.None,
 					Main.Rasterizer);
 
-				Main.spriteBatch.Draw(
-					ring,
-					screenCenter,
-					null,
-					Color.White * intensity,
-					0f,
-					ring.Size() / 2f,
-					ringScale,
-					SpriteEffects.None,
-					0f);
-
-				Main.spriteBatch.Draw(
-					core,
-					screenCenter,
-					null,
-					new Color(255, 255, 255) * 0.26f,
-					Main.GlobalTimeWrappedHourly * 0.25f,
-					core.Size() / 2f,
-					0.42f + 0.06f * pulse,
-					SpriteEffects.None,
-					0f);
-
-				// ---- 头顶鬼眼：第三层起出现，随层数变大 ----
-				if (tier >= 3)
-				{
-					Texture2D overhead = ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
-
-					// 上下浮动，避免像画上去的贴纸。
-					float bob = (float)Math.Sin(Main.GlobalTimeWrappedHourly * 1.5f) * 5f;
-					Vector2 eyePos = screenCenter + new Vector2(0f, -player.height / 2f - 54f + bob);
-
-					float eyeScale = 1.0f + tier * 0.06f + pulse * 0.05f;
-					Main.spriteBatch.Draw(
-						overhead,
-						eyePos,
-						null,
-						Color.White * 0.92f,
-						0f,
-						overhead.Size() / 2f,
-						eyeScale,
-						SpriteEffects.None,
-						0f);
-				}
+				if (hasDomain) DrawDomain(player);
+				if (hasBeam) DrawBeams();
 
 				Main.spriteBatch.End();
 			}
@@ -119,9 +64,116 @@ namespace SpectesGaze.Content.Systems
 			}
 		}
 
-		/// <summary>
-		/// 屏幕四边的红色渐晕。这个要的是屏幕坐标，放在 UI 层直接用屏幕宽高算。
-		/// </summary>
+		// ================= 鬼域 =================
+
+		private static void DrawDomain(Player player)
+		{
+			int tier = GhosteyePlayer.CalculateTier();
+			float radius = GhosteyePlayer.DomainRadiusOf(tier);
+			Vector2 center = player.Center - Main.screenPosition;
+
+			Texture2D ring = ModContent.Request<Texture2D>("SpectesGaze/Content/Textures/Effects/DomainRing").Value;
+			Texture2D core = ModContent.Request<Texture2D>("SpectesGaze/Content/Textures/Effects/DomainCore").Value;
+
+			float pulse = 0.5f + 0.5f * (float)Math.Sin(Main.GlobalTimeWrappedHourly * 2.2f);
+			float intensity = 0.62f + 0.26f * pulse;
+
+			Main.spriteBatch.Draw(
+				ring,
+				center,
+				null,
+				Color.White * intensity,
+				0f,
+				ring.Size() / 2f,
+				radius / TextureRingRadius,
+				SpriteEffects.None,
+				0f);
+
+			Main.spriteBatch.Draw(
+				core,
+				center,
+				null,
+				new Color(255, 255, 255) * 0.26f,
+				Main.GlobalTimeWrappedHourly * 0.25f,
+				core.Size() / 2f,
+				0.42f + 0.06f * pulse,
+				SpriteEffects.None,
+				0f);
+
+			// 头顶鬼眼：第三层起出现，随层数变大。
+			if (tier >= 3)
+			{
+				Texture2D overhead = ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
+
+				float bob = (float)Math.Sin(Main.GlobalTimeWrappedHourly * 1.5f) * 5f;
+				Vector2 eyePos = center + new Vector2(0f, -player.height / 2f - 54f + bob);
+
+				Main.spriteBatch.Draw(
+					overhead,
+					eyePos,
+					null,
+					Color.White * 0.92f,
+					0f,
+					overhead.Size() / 2f,
+					1.0f + tier * 0.06f + pulse * 0.05f,
+					SpriteEffects.None,
+					0f);
+			}
+		}
+
+		// ================= 激光 =================
+
+		private static bool AnyBeamActive()
+		{
+			int type = ModContent.ProjectileType<GhostBeam>();
+
+			for (int i = 0; i < Main.maxProjectiles; i++)
+			{
+				Projectile p = Main.projectile[i];
+				if (p.active && p.type == type) return true;
+			}
+
+			return false;
+		}
+
+		private static void DrawBeams()
+		{
+			int type = ModContent.ProjectileType<GhostBeam>();
+			Texture2D tex = ModContent.Request<Texture2D>("SpectesGaze/Content/Projectiles/GhostBeam").Value;
+
+			// 贴图左边缘中点做原点，旋转后从左端伸出去。
+			Vector2 origin = new Vector2(0f, tex.Height / 2f);
+			float flicker = 0.82f + 0.18f * (float)Math.Sin(Main.GlobalTimeWrappedHourly * 40f);
+
+			for (int i = 0; i < Main.maxProjectiles; i++)
+			{
+				Projectile p = Main.projectile[i];
+				if (!p.active || p.type != type) continue;
+
+				Vector2 aim = p.velocity.SafeNormalize(Vector2.UnitX);
+				Vector2 start = p.Center - Main.screenPosition;
+				float rot = aim.ToRotation();
+
+				// 头尾各 6 帧淡入淡出，避免硬切。
+				float t = p.ai[1];
+				float fade = 1f;
+				if (t < 6f) fade = t / 6f;
+				else if (t > GhostBeam.Duration - 6f) fade = Math.Max(0f, (GhostBeam.Duration - t) / 6f);
+
+				DrawBeamLayer(tex, start, origin, rot, GhostBeam.MaxLength, GhostBeam.Thickness * 1.7f, new Color(110, 8, 18) * (0.5f * flicker * fade));
+				DrawBeamLayer(tex, start, origin, rot, GhostBeam.MaxLength, GhostBeam.Thickness, new Color(215, 45, 55) * (0.78f * flicker * fade));
+				DrawBeamLayer(tex, start, origin, rot, GhostBeam.MaxLength, GhostBeam.Thickness * 0.36f, new Color(255, 205, 205) * (0.9f * flicker * fade));
+			}
+		}
+
+		private static void DrawBeamLayer(Texture2D tex, Vector2 start, Vector2 origin, float rot, float length, float thickness, Color color)
+		{
+			Vector2 scale = new Vector2(length / tex.Width, thickness / tex.Height);
+			Main.spriteBatch.Draw(tex, start, null, color, rot, origin, scale, SpriteEffects.None, 0f);
+		}
+
+		// ================= 边缘渐晕（屏幕坐标） =================
+
 		public override void PostDrawInterface(SpriteBatch spriteBatch)
 		{
 			if (Main.dedServ) return;
