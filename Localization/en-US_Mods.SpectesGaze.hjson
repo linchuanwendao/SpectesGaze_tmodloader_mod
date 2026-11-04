@@ -34,4 +34,12 @@ Buffs: {
 	}
 }
 
-Keybinds.OpenDomain.DisplayName: Open Domain
+Keybinds: {
+	OpenDomain.DisplayName: Open Domain
+	FireBeam.DisplayName: Fire Ghost Beam
+}
+
+Projectiles: {
+	GhostBeam.DisplayName: Ghost Beam
+	GhostBolt.DisplayName: Ghost Bolt
+}

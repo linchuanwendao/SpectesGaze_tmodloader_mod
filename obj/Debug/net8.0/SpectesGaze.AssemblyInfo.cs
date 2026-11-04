@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SpectesGaze")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+627b5c77658d4533d121d195cdbe41399cbbb3c8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+119dd6d82fff12753d47259921f5e7a4fa70802b")]
 [assembly: System.Reflection.AssemblyProductAttribute("SpectesGaze")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SpectesGaze")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

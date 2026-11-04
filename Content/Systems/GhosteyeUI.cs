@@ -70,6 +70,17 @@ namespace SpectesGaze.Content.Systems
 				int sec = mp.DomainCooldown / 60 + 1;
 				Utils.DrawBorderString(spriteBatch, $"鬼眼闭合 {sec}s", new Vector2(barX, barY + barH + 4f), new Color(150, 130, 130), 0.75f);
 			}
+
+			// 激光状态：第五层起才有意义。
+			if (tier >= 5 && mp.DomainOn)
+			{
+				string beamText = mp.BeamCooldown > 0
+					? $"激光 冷却 {mp.BeamCooldown / 60 + 1}s"
+					: "激光 就绪";
+
+				Color beamColor = mp.BeamCooldown > 0 ? new Color(140, 120, 120) : new Color(255, 150, 150);
+				Utils.DrawBorderString(spriteBatch, beamText, new Vector2(barX, barY + barH + 22f), beamColor, 0.72f);
+			}
 		}
 
 		/// <summary>画一个空心矩形边框。用四条 MAGIC PIXEL 拼，一像素宽。</summary>

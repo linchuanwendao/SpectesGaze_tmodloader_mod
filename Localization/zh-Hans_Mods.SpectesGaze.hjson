@@ -34,4 +34,12 @@ Buffs: {
 	}
 }
 
-Keybinds.OpenDomain.DisplayName: 睁开鬼眼
+Keybinds: {
+	OpenDomain.DisplayName: 睁开鬼眼
+	FireBeam.DisplayName: 发射鬼眼激光
+}
+
+Projectiles: {
+	// GhostBeam.DisplayName: Ghost Beam
+	// GhostBolt.DisplayName: Ghost Bolt
+}

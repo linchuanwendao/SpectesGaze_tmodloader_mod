@@ -47,6 +47,12 @@ namespace SpectesGaze.Content.Players
 		/// <summary>鬼域锁定剩余时间（帧）。只在复苏值溢满被迫闭眼时启用。</summary>
 		public int DomainCooldown;
 
+		/// <summary>主动大激光的冷却剩余时间（帧）。</summary>
+		public int BeamCooldown;
+
+		// 被动小激光的发射计时，累计到阈值就打一发。
+		private int boltTimer;
+
 		/// <summary>兼容旧名字，UI 和渲染器都读这个。</summary>
 		public bool DomainActive => DomainOn;
 
@@ -109,6 +115,7 @@ namespace SpectesGaze.Content.Players
 			if (!Equipped) return;
 
 			if (DomainCooldown > 0) DomainCooldown--;
+			if (BeamCooldown > 0) BeamCooldown--;
 
 			// 鬼域开启期间：每帧续一次 buff 保持常驻，同时复苏值持续上涨。
 			if (DomainOn)
@@ -136,6 +143,22 @@ namespace SpectesGaze.Content.Players
 				}
 			}
 			lastTier = tier;
+
+			// 第五层起：鬼域开启时，头顶鬼眼自动攻击范围内的敌人。
+			// 这部分不消耗复苏值，所以给了独立的 0.75 秒间隔，避免白嫖输出过高。
+			if (DomainOn && tier >= 5 && Player.whoAmI == Main.myPlayer)
+			{
+				boltTimer++;
+				if (boltTimer >= 45)
+				{
+					boltTimer = 0;
+					FireBolt(tier);
+				}
+			}
+			else
+			{
+				boltTimer = 0;
+			}
 
 			// 右键瞬移。只在本地玩家身上处理。
 			if (DomainOn && Player.whoAmI == Main.myPlayer && Main.mouseRight && Main.mouseRightRelease)
@@ -216,18 +239,97 @@ namespace SpectesGaze.Content.Players
 		public override void ProcessTriggers(TriggersSet triggersSet)
 		{
 			if (Player.whoAmI != Main.myPlayer) return;
-			if (SpectesGaze.GazeKey == null || !SpectesGaze.GazeKey.JustPressed) return;
 			if (!Equipped) return;
 
 			// 一个键既是开也是关。
-			if (DomainOn)
+			if (SpectesGaze.GazeKey != null && SpectesGaze.GazeKey.JustPressed)
 			{
-				CloseDomain(false);
+				if (DomainOn)
+				{
+					CloseDomain(false);
+				}
+				else
+				{
+					TryOpenDomain();
+				}
 			}
-			else
+
+			// 大激光：第五层起，鬼域开启状态下才能用。
+			if (SpectesGaze.BeamKey != null && SpectesGaze.BeamKey.JustPressed)
 			{
-				TryOpenDomain();
+				if (DomainOn && CalculateTier() >= 5)
+				{
+					TryFireBeam();
+				}
 			}
+		}
+
+		/// <summary>
+		/// 被动小激光。找鬼域范围内最近的敌人打一发。
+		/// </summary>
+		private void FireBolt(int tier)
+		{
+			float radius = DomainRadiusOf(tier);
+			float bestDist = radius * radius;
+			NPC target = null;
+
+			for (int i = 0; i < Main.maxNPCs; i++)
+			{
+				NPC npc = Main.npc[i];
+				if (!npc.active || npc.friendly || npc.immortal || npc.dontTakeDamage) continue;
+
+				float dist = Vector2.DistanceSquared(npc.Center, Player.Center);
+				if (dist < bestDist)
+				{
+					bestDist = dist;
+					target = npc;
+				}
+			}
+
+			if (target == null) return;
+
+			Vector2 dir = (target.Center - Player.Center).SafeNormalize(Vector2.UnitX);
+			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(25f + tier * 8f);
+
+			Projectile.NewProjectile(
+				Player.GetSource_FromThis(),
+				Player.Center,
+				dir * 14f,
+				ModContent.ProjectileType<Projectiles.GhostBolt>(),
+				damage,
+				0f,
+				Player.whoAmI);
+		}
+
+		/// <summary>
+		/// 主动大激光。朝鼠标方向发一道持续 1.5 秒的光束，发射要付复苏值。
+		/// 冷却 20 秒，第六层起降到 10 秒。
+		/// </summary>
+		private void TryFireBeam()
+		{
+			if (BeamCooldown > 0)
+			{
+				Main.NewText($"激光还在冷却，{BeamCooldown / 60 + 1} 秒。", 160, 60, 60);
+				return;
+			}
+
+			int tier = CalculateTier();
+			Vector2 dir = (Main.MouseWorld - Player.Center).SafeNormalize(Vector2.UnitX);
+			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(120f + tier * 20f);
+
+			Projectile.NewProjectile(
+				Player.GetSource_FromThis(),
+				Player.Center,
+				dir,
+				ModContent.ProjectileType<Projectiles.GhostBeam>(),
+				damage,
+				0f,
+				Player.whoAmI);
+
+			BeamCooldown = 60 * (tier >= 6 ? 10 : 20);
+			Revival = Math.Min(MaxRevival, Revival + 8f);
+
+			SoundEngine.PlaySound(SoundID.Item72 with { Volume = 0.9f, Pitch = -0.2f }, Player.Center);
 		}
 
 		private void TryOpenDomain()
