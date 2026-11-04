@@ -221,7 +221,7 @@ namespace SpectesGaze.Content.Players
 			if (Main.netMode == NetmodeID.Server) return;
 			if (CalculateTier() < 4) return;
 
-			target.AddBuff(ModContent.BuffType<GhostFlame>(), 180);
+			target.AddBuff(ModContent.BuffType<GhostFlame>(), 300);
 		}
 
 		private void TryApplySlow(NPC target)

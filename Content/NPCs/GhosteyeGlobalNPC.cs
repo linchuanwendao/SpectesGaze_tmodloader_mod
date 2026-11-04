@@ -23,8 +23,9 @@ namespace SpectesGaze.Content.NPCs
 
 		/// <summary>
 		/// 鬼火灼烧的持续伤害。层数越高烧得越快：
-		/// 4 层 10/秒，5~6 层 20/秒，7 层以上 50/秒。
+		/// 4 层 30/秒，5~6 层 60/秒，7 层以上 150/秒。
 		/// lifeRegen 的单位是每帧累积值，每秒伤害等于 -lifeRegen / 2。
+		/// 初版给的 10/20/50 实测太刮，整体提高三倍。
 		/// </summary>
 		public override void UpdateLifeRegen(NPC npc, ref int damage)
 		{
@@ -33,9 +34,9 @@ namespace SpectesGaze.Content.NPCs
 			int tier = GhosteyePlayer.CalculateTier();
 
 			int dps;
-			if (tier >= 7) dps = 50;
-			else if (tier >= 5) dps = 20;
-			else dps = 10;
+			if (tier >= 7) dps = 150;
+			else if (tier >= 5) dps = 60;
+			else dps = 30;
 
 			// 先把正向回血清零，否则高回血的怪会把伤害吃掉。
 			if (npc.lifeRegen > 0) npc.lifeRegen = 0;
