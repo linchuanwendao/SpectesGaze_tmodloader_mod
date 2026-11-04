@@ -85,6 +85,28 @@ namespace SpectesGaze.Content.Systems
 					SpriteEffects.None,
 					0f);
 
+				// ---- 头顶鬼眼：第三层起出现，随层数变大 ----
+				if (tier >= 3)
+				{
+					Texture2D overhead = ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
+
+					// 上下浮动，避免像画上去的贴纸。
+					float bob = (float)Math.Sin(Main.GlobalTimeWrappedHourly * 1.5f) * 5f;
+					Vector2 eyePos = screenCenter + new Vector2(0f, -player.height / 2f - 54f + bob);
+
+					float eyeScale = 1.0f + tier * 0.06f + pulse * 0.05f;
+					Main.spriteBatch.Draw(
+						overhead,
+						eyePos,
+						null,
+						Color.White * 0.92f,
+						0f,
+						overhead.Size() / 2f,
+						eyeScale,
+						SpriteEffects.None,
+						0f);
+				}
+
 				Main.spriteBatch.End();
 			}
 			catch (Exception e)

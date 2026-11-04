@@ -27,6 +27,11 @@ Buffs: {
 		DisplayName: 迟缓
 		Description: 被鬼眼看见的东西，动作变慢了。
 	}
+
+	GhostFlame: {
+		DisplayName: 鬼火
+		Description: 它烧的不是身体。
+	}
 }
 
 Keybinds.OpenDomain.DisplayName: 睁开鬼眼

@@ -2,11 +2,12 @@ using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Buffs;
+using SpectesGaze.Content.Players;
 
 namespace SpectesGaze.Content.NPCs
 {
 	/// <summary>
-	/// 敌人身上的全局修改。目前只处理减速。
+	/// 敌人身上的全局修改：减速、鬼火灼烧的伤害结算。
 	/// </summary>
 	public class GhosteyeGlobalNPC : GlobalNPC
 	{
@@ -18,6 +19,31 @@ namespace SpectesGaze.Content.NPCs
 			{
 				npc.velocity *= 0.88f;
 			}
+		}
+
+		/// <summary>
+		/// 鬼火灼烧的持续伤害。层数越高烧得越快：
+		/// 4 层 10/秒，5~6 层 20/秒，7 层以上 50/秒。
+		/// lifeRegen 的单位是每帧累积值，每秒伤害等于 -lifeRegen / 2。
+		/// </summary>
+		public override void UpdateLifeRegen(NPC npc, ref int damage)
+		{
+			if (!npc.HasBuff(ModContent.BuffType<GhostFlame>())) return;
+
+			int tier = GhosteyePlayer.CalculateTier();
+
+			int dps;
+			if (tier >= 7) dps = 50;
+			else if (tier >= 5) dps = 20;
+			else dps = 10;
+
+			// 先把正向回血清零，否则高回血的怪会把伤害吃掉。
+			if (npc.lifeRegen > 0) npc.lifeRegen = 0;
+
+			npc.lifeRegen -= dps * 2;
+
+			// damage 决定跳字大小，给个合理值。
+			if (damage < dps / 2) damage = dps / 2;
 		}
 	}
 }

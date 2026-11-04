@@ -81,6 +81,9 @@ namespace SpectesGaze.Content.Players
 			Equipped = true;
 			Revival = 0f;
 
+			// 记录装备时的层数，避免第一次更新时误报"升级"。
+			lastTier = CalculateTier();
+
 			// 首次佩戴强制扣掉当前血量的 80%，至少保留 1 点，避免装备即死。
 			int loss = (int)(Player.statLife * 0.8f);
 			Player.statLife = Math.Max(1, Player.statLife - loss);
@@ -122,8 +125,9 @@ namespace SpectesGaze.Content.Players
 			}
 
 			// 检测升层：每提升一层，把上一级积累的复苏值清零。
+			// lastTier > 0 的检查是为了避免新存档第一次更新时误报。
 			int tier = CalculateTier();
-			if (tier > lastTier)
+			if (lastTier > 0 && tier > lastTier)
 			{
 				Revival = 0f;
 				if (Main.netMode != NetmodeID.Server && Player.whoAmI == Main.myPlayer)
@@ -175,11 +179,26 @@ namespace SpectesGaze.Content.Players
 		public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
 		{
 			TryApplySlow(target);
+			TryApplyFlame(target);
 		}
 
 		public override void OnHitNPCWithProj(Projectile proj, NPC target, NPC.HitInfo hit, int damageDone)
 		{
 			TryApplySlow(target);
+			TryApplyFlame(target);
+		}
+
+		/// <summary>
+		/// 鬼火灼烧：第四层起，攻击命中必定点燃。具体每秒伤害由层数决定，
+		/// 结算在 GhosteyeGlobalNPC.UpdateLifeRegen，这里只负责挂 buff。
+		/// </summary>
+		private void TryApplyFlame(NPC target)
+		{
+			if (!Equipped) return;
+			if (Main.netMode == NetmodeID.Server) return;
+			if (CalculateTier() < 4) return;
+
+			target.AddBuff(ModContent.BuffType<GhostFlame>(), 180);
 		}
 
 		private void TryApplySlow(NPC target)
@@ -320,21 +339,26 @@ namespace SpectesGaze.Content.Players
 		// ================= 层数判定 =================
 
 		/// <summary>
-		/// 按主线进度换算层数。十个节点对十层，和小说顺序一致。
-		/// 从高到低判断，命中即返回。
+		/// 按主线进度换算层数。从高到低判断，命中即返回。
+		///
+		/// 顺序必须严格对齐设计文档，之前写错过一次：
+		/// 眼 -> 世吞/脑 -> 骷髅王 -> 血肉墙 -> 三王齐 -> 石巨人 -> 教徒 -> 四柱之一 -> 月总
+		///
+		/// 注意这里没有"升级事件"，层数是每次现算的。世界进度一变，返回值立刻变。
 		/// 灾厄 DLC 之后会用另一套进度覆盖这里，所以全项目只有这一个入口。
 		/// </summary>
 		public static int CalculateTier()
 		{
-			if (NPC.downedMoonlord) return 10;
-			if (NPC.downedTowerSolar && NPC.downedTowerNebula && NPC.downedTowerVortex && NPC.downedTowerStardust) return 9;
-			if (NPC.downedAncientCultist) return 8;
-			if (NPC.downedFishron) return 7;
-			if (NPC.downedGolemBoss) return 6;
-			if (NPC.downedPlantBoss) return 5;
-			if (NPC.downedMechBossAny) return 4;
-			if (Main.hardMode) return 3;
-			if (NPC.downedBoss1 || NPC.downedBoss2 || NPC.downedBoss3 || NPC.downedSlimeKing) return 2;
+			if (NPC.downedMoonlord) return 10;                                                        // 月亮领主
+			if (NPC.downedTowerSolar || NPC.downedTowerNebula
+				|| NPC.downedTowerVortex || NPC.downedTowerStardust) return 9;                        // 四柱任一
+			if (NPC.downedAncientCultist) return 8;                                                   // 拜月教徒
+			if (NPC.downedGolemBoss) return 7;                                                        // 石巨人
+			if (NPC.downedMechBoss1 && NPC.downedMechBoss2 && NPC.downedMechBoss3) return 6;           // 三王齐
+			if (Main.hardMode) return 5;                                                              // 血肉墙之后
+			if (NPC.downedBoss3) return 4;                                                            // 骷髅王
+			if (NPC.downedBoss2) return 3;                                                            // 世界吞噬者 / 克苏鲁之脑
+			if (NPC.downedBoss1) return 2;                                                            // 克苏鲁之眼
 			return 1;
 		}
 

@@ -27,6 +27,11 @@ Buffs: {
 		DisplayName: Slowed
 		Description: Whatever it looks at begins to drag.
 	}
+
+	GhostFlame: {
+		DisplayName: Ghost Flame
+		Description: What it burns is not the body.
+	}
 }
 
 Keybinds.OpenDomain.DisplayName: Open Domain

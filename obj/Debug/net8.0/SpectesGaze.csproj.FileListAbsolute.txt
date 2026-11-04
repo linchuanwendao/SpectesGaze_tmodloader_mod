@@ -11,3 +11,4 @@ C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\De
 C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.pdb
 C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\ref\SpectesGaze.dll
 C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesG.50375846.Up2Date
+C:\Users\HP\Documents\My Games\Terraria\tModLoader\ModSources\SpectesGaze\obj\Debug\net8.0\SpectesGaze.sourcelink.json
