@@ -32,11 +32,18 @@ Buffs: {
 		DisplayName: 鬼火
 		Description: 它烧的不是身体。
 	}
+
+	GhostStill: {
+		DisplayName: 静止
+		Description: 连呼吸都被按住。
+	}
 }
 
 Keybinds: {
 	OpenDomain.DisplayName: 睁开鬼眼
 	FireBeam.DisplayName: 发射鬼眼激光
+	FreezeDomain.DisplayName: 静止鬼域
+	RestartSelf.DisplayName: 重启自身
 }
 
 Projectiles: {

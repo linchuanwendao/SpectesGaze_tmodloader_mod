@@ -32,11 +32,18 @@ Buffs: {
 		DisplayName: Ghost Flame
 		Description: What it burns is not the body.
 	}
+
+	GhostStill: {
+		DisplayName: Stillness
+		Description: Even breathing is held down.
+	}
 }
 
 Keybinds: {
 	OpenDomain.DisplayName: Open Domain
 	FireBeam.DisplayName: Fire Ghost Beam
+	FreezeDomain.DisplayName: Freeze Domain
+	RestartSelf.DisplayName: Restart Self
 }
 
 Projectiles: {

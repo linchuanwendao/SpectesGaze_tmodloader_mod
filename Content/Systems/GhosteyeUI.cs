@@ -60,26 +60,45 @@ namespace SpectesGaze.Content.Systems
 			// 层数
 			Utils.DrawBorderString(spriteBatch, $"第 {tier} 层", new Vector2(barX, barY - 22f), new Color(220, 150, 150), 0.8f);
 
-			// 鬼域状态
+			// 状态行从条下面开始，逐行往下排，避免不同层数时位置跳动。
+			float lineY = barY + barH + 4f;
+			const float lineStep = 18f;
+
+			// 鬼域
 			if (mp.DomainOn)
 			{
-				Utils.DrawBorderString(spriteBatch, "鬼域 开启中", new Vector2(barX, barY + barH + 4f), new Color(230, 90, 90), 0.75f);
+				Utils.DrawBorderString(spriteBatch, "鬼域 开启中", new Vector2(barX, lineY), new Color(230, 90, 90), 0.75f);
 			}
 			else if (mp.DomainCooldown > 0)
 			{
-				int sec = mp.DomainCooldown / 60 + 1;
-				Utils.DrawBorderString(spriteBatch, $"鬼眼闭合 {sec}s", new Vector2(barX, barY + barH + 4f), new Color(150, 130, 130), 0.75f);
+				Utils.DrawBorderString(spriteBatch, $"鬼眼闭合 {mp.DomainCooldown / 60 + 1}s", new Vector2(barX, lineY), new Color(150, 130, 130), 0.75f);
+			}
+			lineY += lineStep;
+
+			// 激光：第五层起
+			if (tier >= 5)
+			{
+				string text = mp.BeamCooldown > 0 ? $"激光 冷却 {mp.BeamCooldown / 60 + 1}s" : "激光 就绪";
+				Color c = mp.BeamCooldown > 0 ? new Color(140, 120, 120) : new Color(255, 150, 150);
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), c, 0.72f);
+				lineY += lineStep;
 			}
 
-			// 激光状态：第五层起才有意义。
-			if (tier >= 5 && mp.DomainOn)
+			// 静止：第六层起
+			if (tier >= 6)
 			{
-				string beamText = mp.BeamCooldown > 0
-					? $"激光 冷却 {mp.BeamCooldown / 60 + 1}s"
-					: "激光 就绪";
+				string text = mp.StillCooldown > 0 ? $"静止 冷却 {mp.StillCooldown / 60 + 1}s" : "静止 就绪";
+				Color c = mp.StillCooldown > 0 ? new Color(140, 120, 120) : new Color(150, 200, 230);
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), c, 0.72f);
+				lineY += lineStep;
+			}
 
-				Color beamColor = mp.BeamCooldown > 0 ? new Color(140, 120, 120) : new Color(255, 150, 150);
-				Utils.DrawBorderString(spriteBatch, beamText, new Vector2(barX, barY + barH + 22f), beamColor, 0.72f);
+			// 重启自身：第七层起
+			if (tier >= 7)
+			{
+				string text = mp.RestartCooldown > 0 ? $"重启 冷却 {mp.RestartCooldown / 60 + 1}s" : "重启 就绪";
+				Color c = mp.RestartCooldown > 0 ? new Color(140, 120, 120) : new Color(200, 160, 230);
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), c, 0.72f);
 			}
 		}
 

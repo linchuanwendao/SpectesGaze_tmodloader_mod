@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.Audio;
@@ -50,8 +51,21 @@ namespace SpectesGaze.Content.Players
 		/// <summary>主动大激光的冷却剩余时间（帧）。</summary>
 		public int BeamCooldown;
 
+		/// <summary>静止的冷却剩余时间（帧）。</summary>
+		public int StillCooldown;
+
+		/// <summary>重启自身的冷却剩余时间（帧）。</summary>
+		public int RestartCooldown;
+
 		// 被动小激光的发射计时，累计到阈值就打一发。
 		private int boltTimer;
+
+		// 位置历史，供"重启自身"回到 3 秒前。每 5 帧记一次，保留 36 条。
+		private readonly Queue<Vector2> restartHistory = new();
+		private int historyTick;
+
+		/// <summary>历史保存的采样点数。36 × 5 帧 = 180 帧 = 3 秒。</summary>
+		private const int HistoryCapacity = 36;
 
 		/// <summary>兼容旧名字，UI 和渲染器都读这个。</summary>
 		public bool DomainActive => DomainOn;
@@ -116,6 +130,17 @@ namespace SpectesGaze.Content.Players
 
 			if (DomainCooldown > 0) DomainCooldown--;
 			if (BeamCooldown > 0) BeamCooldown--;
+			if (StillCooldown > 0) StillCooldown--;
+			if (RestartCooldown > 0) RestartCooldown--;
+
+			// 每 5 帧记一次位置，供重启自身回溯。
+			historyTick++;
+			if (historyTick >= 5)
+			{
+				historyTick = 0;
+				restartHistory.Enqueue(Player.Center);
+				while (restartHistory.Count > HistoryCapacity) restartHistory.Dequeue();
+			}
 
 			// 鬼域开启期间：每帧续一次 buff 保持常驻，同时复苏值持续上涨。
 			if (DomainOn)
@@ -260,6 +285,116 @@ namespace SpectesGaze.Content.Players
 				if (DomainOn && CalculateTier() >= 5)
 				{
 					TryFireBeam();
+				}
+			}
+
+			// 静止：第六层起，鬼域开启状态下才能用。
+			if (SpectesGaze.StillKey != null && SpectesGaze.StillKey.JustPressed)
+			{
+				if (DomainOn && CalculateTier() >= 6)
+				{
+					TryActivateStill();
+				}
+			}
+
+			// 重启自身：第七层起，不要求鬼域开着。
+			if (SpectesGaze.RestartKey != null && SpectesGaze.RestartKey.JustPressed)
+			{
+				if (CalculateTier() >= 7)
+				{
+					TryRestartSelf();
+				}
+			}
+		}
+
+		/// <summary>
+		/// 静止。鬼域内所有生物定住：普通敌人和动物 5 秒，boss 2 秒。
+		/// 位置锁定在 GhosteyeGlobalNPC.PostAI 里执行。
+		/// </summary>
+		private void TryActivateStill()
+		{
+			if (StillCooldown > 0)
+			{
+				Main.NewText($"静止还在冷却，{StillCooldown / 60 + 1} 秒。", 160, 60, 60);
+				return;
+			}
+
+			int tier = CalculateTier();
+			float radius = DomainRadiusOf(tier);
+			int count = 0;
+
+			for (int i = 0; i < Main.maxNPCs; i++)
+			{
+				NPC npc = Main.npc[i];
+				if (!npc.active || npc.friendly || npc.immortal || npc.dontTakeDamage) continue;
+				if (Vector2.DistanceSquared(npc.Center, Player.Center) > radius * radius) continue;
+
+				// boss 只定 2 秒，普通生物 5 秒。
+				npc.AddBuff(ModContent.BuffType<GhostStill>(), npc.boss ? 120 : 300);
+				count++;
+			}
+
+			StillCooldown = 60 * 30;
+			Revival = Math.Min(MaxRevival, Revival + 12f);
+
+			if (count > 0)
+			{
+				SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.8f, Pitch = -0.4f }, Player.Center);
+			}
+		}
+
+		/// <summary>
+		/// 重启自身。回满血、清空负面效果、退回 3 秒前的位置。
+		/// 复苏值不回退，这是技能代价。
+		/// </summary>
+		private void TryRestartSelf()
+		{
+			if (RestartCooldown > 0)
+			{
+				Main.NewText($"重启还在冷却，{RestartCooldown / 60 + 1} 秒。", 160, 60, 60);
+				return;
+			}
+
+			int healed = Player.statLifeMax2 - Player.statLife;
+			Player.statLife = Player.statLifeMax2;
+			if (healed > 0) Player.HealEffect(healed, true);
+
+			// 清掉所有负面效果。DelBuff 会打乱数组，所以下标要回退一位。
+			for (int i = 0; i < Player.MaxBuffs; i++)
+			{
+				int type = Player.buffType[i];
+				if (type <= 0) continue;
+				if (!Main.debuff[type]) continue;
+
+				Player.DelBuff(i);
+				i--;
+			}
+
+			// 退回 3 秒前的位置，落点站不下人就放弃位移，只保留回血。
+			if (restartHistory.Count > 0)
+			{
+				Vector2 back = restartHistory.Peek();
+				Vector2 checkPos = back - Player.Size / 2f;
+
+				if (!Collision.SolidCollision(checkPos, Player.width, Player.height))
+				{
+					Player.Teleport(checkPos, 1);
+					Player.velocity = Vector2.Zero;
+				}
+			}
+
+			RestartCooldown = 60 * 30;
+			Revival = Math.Min(MaxRevival, Revival + 18f);
+
+			SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.9f, Pitch = -0.5f }, Player.Center);
+
+			if (Main.netMode != NetmodeID.Server)
+			{
+				for (int i = 0; i < 30; i++)
+				{
+					Vector2 vel = Main.rand.NextVector2Circular(5f, 5f);
+					Dust d = Dust.NewDustDirect(Player.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.4f);
+					d.noGravity = true;
 				}
 			}
 		}
