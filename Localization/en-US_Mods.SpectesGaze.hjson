@@ -44,6 +44,7 @@ Keybinds: {
 	FireBeam.DisplayName: Fire Ghost Beam
 	FreezeDomain.DisplayName: Freeze Domain
 	RestartSelf.DisplayName: Restart Self
+	ResetRevival.DisplayName: Clear Revival (Test)
 }
 
 Projectiles: {

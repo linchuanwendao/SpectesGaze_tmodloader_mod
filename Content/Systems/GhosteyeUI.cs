@@ -78,27 +78,42 @@ namespace SpectesGaze.Content.Systems
 			// 激光：第五层起
 			if (tier >= 5)
 			{
-				string text = mp.BeamCooldown > 0 ? $"激光 冷却 {mp.BeamCooldown / 60 + 1}s" : "激光 就绪";
-				Color c = mp.BeamCooldown > 0 ? new Color(140, 120, 120) : new Color(255, 150, 150);
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), c, 0.72f);
+				bool ready = mp.DomainOn && mp.BeamCooldown <= 0;
+				string text = !mp.DomainOn
+					? "激光 需开域"
+					: mp.BeamCooldown > 0
+						? $"激光 冷却 {mp.BeamCooldown / 60 + 1}s"
+						: "激光 就绪";
+
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready ? new Color(255, 150, 150) : new Color(140, 120, 120), 0.72f);
 				lineY += lineStep;
 			}
 
 			// 静止：第六层起
 			if (tier >= 6)
 			{
-				string text = mp.StillCooldown > 0 ? $"静止 冷却 {mp.StillCooldown / 60 + 1}s" : "静止 就绪";
-				Color c = mp.StillCooldown > 0 ? new Color(140, 120, 120) : new Color(150, 200, 230);
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), c, 0.72f);
+				bool ready = mp.DomainOn && mp.StillCooldown <= 0;
+				string text = !mp.DomainOn
+					? "静止 需开域"
+					: mp.StillCooldown > 0
+						? $"静止 冷却 {mp.StillCooldown / 60 + 1}s"
+						: "静止 就绪";
+
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready ? new Color(150, 200, 230) : new Color(140, 120, 120), 0.72f);
 				lineY += lineStep;
 			}
 
 			// 重启自身：第七层起
 			if (tier >= 7)
 			{
-				string text = mp.RestartCooldown > 0 ? $"重启 冷却 {mp.RestartCooldown / 60 + 1}s" : "重启 就绪";
-				Color c = mp.RestartCooldown > 0 ? new Color(140, 120, 120) : new Color(200, 160, 230);
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), c, 0.72f);
+				bool ready = mp.DomainOn && mp.RestartCooldown <= 0;
+				string text = !mp.DomainOn
+					? "重启 需开域"
+					: mp.RestartCooldown > 0
+						? $"重启 冷却 {mp.RestartCooldown / 60 + 1}s"
+						: "重启 就绪";
+
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready ? new Color(200, 160, 230) : new Color(140, 120, 120), 0.72f);
 			}
 		}
 

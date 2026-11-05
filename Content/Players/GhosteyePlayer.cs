@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.Audio;
@@ -59,13 +58,6 @@ namespace SpectesGaze.Content.Players
 
 		// 被动小激光的发射计时，累计到阈值就打一发。
 		private int boltTimer;
-
-		// 位置历史，供"重启自身"回到 3 秒前。每 5 帧记一次，保留 36 条。
-		private readonly Queue<Vector2> restartHistory = new();
-		private int historyTick;
-
-		/// <summary>历史保存的采样点数。36 × 5 帧 = 180 帧 = 3 秒。</summary>
-		private const int HistoryCapacity = 36;
 
 		/// <summary>兼容旧名字，UI 和渲染器都读这个。</summary>
 		public bool DomainActive => DomainOn;
@@ -132,15 +124,6 @@ namespace SpectesGaze.Content.Players
 			if (BeamCooldown > 0) BeamCooldown--;
 			if (StillCooldown > 0) StillCooldown--;
 			if (RestartCooldown > 0) RestartCooldown--;
-
-			// 每 5 帧记一次位置，供重启自身回溯。
-			historyTick++;
-			if (historyTick >= 5)
-			{
-				historyTick = 0;
-				restartHistory.Enqueue(Player.Center);
-				while (restartHistory.Count > HistoryCapacity) restartHistory.Dequeue();
-			}
 
 			// 鬼域开启期间：每帧续一次 buff 保持常驻，同时复苏值持续上涨。
 			if (DomainOn)
@@ -297,14 +280,28 @@ namespace SpectesGaze.Content.Players
 				}
 			}
 
-			// 重启自身：第七层起，不要求鬼域开着。
+			// 重启自身：第七层起，且必须鬼域开着。
+			// 要求开域是为了防止在闭眼状态下推高复苏值，否则会出现"复苏值满但鬼眼睁不开"的死锁。
 			if (SpectesGaze.RestartKey != null && SpectesGaze.RestartKey.JustPressed)
 			{
-				if (CalculateTier() >= 7)
+				if (DomainOn && CalculateTier() >= 7)
 				{
 					TryRestartSelf();
 				}
 			}
+
+			// 测试用：清零复苏值。正式发布前删掉这段。
+			if (SpectesGaze.ResetKey != null && SpectesGaze.ResetKey.JustPressed)
+			{
+				ResetRevival();
+			}
+		}
+
+		/// <summary>测试用。把复苏值直接清零，省得等自然回落。</summary>
+		public void ResetRevival()
+		{
+			Revival = 0f;
+			Main.NewText("[测试] 复苏值已清零", 130, 200, 130);
 		}
 
 		/// <summary>
@@ -344,8 +341,9 @@ namespace SpectesGaze.Content.Players
 		}
 
 		/// <summary>
-		/// 重启自身。回满血、清空负面效果、退回 3 秒前的位置。
-		/// 复苏值不回退，这是技能代价。
+		/// 重启自身。回满血、清空负面效果。
+		/// 不回退位置：位置不是"状态"，把玩家拉回三秒前会破坏走位和战斗节奏。
+		/// 复苏值也不回退，这是技能代价。
 		/// </summary>
 		private void TryRestartSelf()
 		{
@@ -368,19 +366,6 @@ namespace SpectesGaze.Content.Players
 
 				Player.DelBuff(i);
 				i--;
-			}
-
-			// 退回 3 秒前的位置，落点站不下人就放弃位移，只保留回血。
-			if (restartHistory.Count > 0)
-			{
-				Vector2 back = restartHistory.Peek();
-				Vector2 checkPos = back - Player.Size / 2f;
-
-				if (!Collision.SolidCollision(checkPos, Player.width, Player.height))
-				{
-					Player.Teleport(checkPos, 1);
-					Player.velocity = Vector2.Zero;
-				}
 			}
 
 			RestartCooldown = 60 * 30;
@@ -475,11 +460,11 @@ namespace SpectesGaze.Content.Players
 				return;
 			}
 
-			// 复苏值已经满了就不让开，否则开出来下一帧就会被强制闭合。
+			// 理论上走不到这里：开域期间溢满会自动闭合并把值压到 60。
+			// 但如果存档异常让它停在 100，这里兜底回落，避免永久打不开。
 			if (Revival >= MaxRevival)
 			{
-				Main.NewText("复苏值已满，鬼眼拒绝睁开。", 160, 60, 60);
-				return;
+				Revival = 60f;
 			}
 
 			DomainOn = true;

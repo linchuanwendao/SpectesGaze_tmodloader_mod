@@ -17,12 +17,16 @@ namespace SpectesGaze
 		// 重启自身。第七层起可用。
 		public static ModKeybind RestartKey { get; private set; }
 
+		// 测试用：一键把复苏值清零。正式发布前删掉。
+		public static ModKeybind ResetKey { get; private set; }
+
 		public override void Load()
 		{
 			GazeKey = KeybindLoader.RegisterKeybind(this, "OpenDomain", "None");
 			BeamKey = KeybindLoader.RegisterKeybind(this, "FireBeam", "None");
 			StillKey = KeybindLoader.RegisterKeybind(this, "FreezeDomain", "None");
 			RestartKey = KeybindLoader.RegisterKeybind(this, "RestartSelf", "None");
+			ResetKey = KeybindLoader.RegisterKeybind(this, "ResetRevival", "F10");
 		}
 
 		public override void Unload()
@@ -32,6 +36,7 @@ namespace SpectesGaze
 			BeamKey = null;
 			StillKey = null;
 			RestartKey = null;
+			ResetKey = null;
 		}
 	}
 }
