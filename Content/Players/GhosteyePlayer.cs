@@ -443,12 +443,13 @@ namespace SpectesGaze.Content.Players
 			}
 
 			int tier = CalculateTier();
-			Vector2 dir = (Main.MouseWorld - Player.Center).SafeNormalize(Vector2.UnitX);
+			Vector2 origin = FloatingEyeCenter;
+			Vector2 dir = (Main.MouseWorld - origin).SafeNormalize(Vector2.UnitX);
 			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(120f + tier * 20f);
 
 			Projectile.NewProjectile(
 				Player.GetSource_FromThis(),
-				Player.Center,
+				origin,
 				dir,
 				ModContent.ProjectileType<Projectiles.GhostBeam>(),
 				damage,
@@ -458,7 +459,7 @@ namespace SpectesGaze.Content.Players
 			BeamCooldown = 60 * (tier >= 6 ? 10 : 20);
 			Revival = Math.Min(MaxRevival, Revival + SkillCost(8f, 5));
 
-			SoundEngine.PlaySound(SoundID.Item72 with { Volume = 0.9f, Pitch = -0.2f }, Player.Center);
+			SoundEngine.PlaySound(SoundID.Item72 with { Volume = 0.9f, Pitch = -0.2f }, origin);
 		}
 
 		private void TryOpenDomain()

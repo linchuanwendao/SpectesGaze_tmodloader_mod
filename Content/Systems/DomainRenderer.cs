@@ -25,6 +25,7 @@ namespace SpectesGaze.Content.Systems
 		private static Texture2D ring;
 		private static Texture2D strip;
 		private int domainAge;
+		private float DomainFade => MathHelper.SmoothStep(0f, 1f, (domainAge + 1) / 23f);
 
 		public override void Unload()
 		{
@@ -74,12 +75,28 @@ namespace SpectesGaze.Content.Systems
 				GhosteyeEffects.Draw(time, view);
 				DrawNpcEffects(time, view);
 
+				Vector2? firingEye = null;
 				for (int i = 0; i < Main.maxProjectiles; i++)
 				{
 					Projectile projectile = Main.projectile[i];
 					if (!projectile.active) continue;
-					if (projectile.type == beamType) DrawBeam(projectile, time, view);
+					if (projectile.type == beamType)
+					{
+						DrawBeam(projectile, time, view);
+						if (projectile.owner == Main.myPlayer) firingEye = projectile.Center;
+					}
 					else if (projectile.type == boltType && view.Intersects(projectile.Hitbox)) DrawBolt(projectile);
+				}
+
+				// 鬼眼最后画，发射时不会被光束起点的红雾盖住。
+				if (hasDomain || firingEye.HasValue)
+				{
+					int tier = GhosteyePlayer.CalculateTier();
+					if (tier >= 3)
+					{
+						Vector2 eyePos = firingEye ?? player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
+						DrawEye(eyePos, tier, time, firingEye.HasValue ? 1f : DomainFade);
+					}
 				}
 			}
 			finally
@@ -93,9 +110,9 @@ namespace SpectesGaze.Content.Systems
 			int tier = GhosteyePlayer.CalculateTier();
 			float radius = GhosteyePlayer.DomainRadiusOf(tier);
 			Vector2 center = player.Center;
-			float fade = MathHelper.SmoothStep(0f, 1f, (domainAge + 1) / 23f);
-			float pulse = Wave(time * 2.1f + MathF.Sin(time * 0.8f));
-			Color red = Color.Lerp(Blood, new Color(158, 33, 69), (tier - 1) / 9f);
+			float fade = DomainFade;
+			float pulse = DomainPulse(time);
+			Color red = DomainColor(tier);
 
 			DrawGlow(center, new Vector2(radius * 2.15f), Shadow * (0.36f * fade));
 			for (int i = 0; i < 9; i++)
@@ -127,11 +144,13 @@ namespace SpectesGaze.Content.Systems
 			Vector2 anchor = center + new Vector2(0f, player.height * 0.45f);
 			Stamp(core, anchor, new Vector2(110f, 58f) * (1f + 0.14f * pulse),
 				Color.White * (0.21f * fade), 0f);
+		}
 
-			if (tier < 3) return;
+		private static void DrawEye(Vector2 eyePos, int tier, float time, float fade)
+		{
 			Texture2D eye = ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
-			Vector2 eyePos = player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
-			float eyeSize = 44f + tier * 3f + pulse * 3f;
+			Color red = DomainColor(tier);
+			float eyeSize = 44f + tier * 3f + DomainPulse(time) * 3f;
 			DrawGlow(eyePos, new Vector2(eyeSize * 2.5f, eyeSize * 2f), Shadow * (0.74f * fade));
 			DrawGlow(eyePos, new Vector2(eyeSize * 1.6f, eyeSize * 1.3f), Light(red, fade * 0.4f));
 			for (int i = -2; i <= 2; i++)
@@ -147,6 +166,10 @@ namespace SpectesGaze.Content.Systems
 			Stamp(eye, eyePos, new Vector2(eyeSize, eyeSize * (1f - blink * 0.67f)),
 				Color.White * fade, MathF.Sin(time * 1.6f) * 0.07f);
 		}
+
+		private static float DomainPulse(float time) => Wave(time * 2.1f + MathF.Sin(time * 0.8f));
+
+		private static Color DomainColor(int tier) => Color.Lerp(Blood, new Color(158, 33, 69), (tier - 1) / 9f);
 
 		internal static void DrawTornEdge(Vector2 center, float radius, float time, Color color, float opacity, Rectangle view)
 		{

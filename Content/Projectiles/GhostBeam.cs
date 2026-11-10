@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ModLoader;
+using SpectesGaze.Content.Players;
 using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.Projectiles
@@ -43,6 +44,9 @@ namespace SpectesGaze.Content.Projectiles
 			Projectile.timeLeft = 600;
 		}
 
+		// velocity 表示瞄准方向，位置由鬼眼每帧提供。
+		public override bool ShouldUpdatePosition() => false;
+
 		public override void AI()
 		{
 			Player player = Main.player[Projectile.owner];
@@ -60,32 +64,32 @@ namespace SpectesGaze.Content.Projectiles
 				return;
 			}
 
+			Vector2 start = player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
+
 			// 只有发射者决定方向，其他人跟随同步过来的 velocity。
 			if (Projectile.owner == Main.myPlayer)
 			{
-				Projectile.velocity = (Main.MouseWorld - player.Center).SafeNormalize(Vector2.UnitX);
+				Projectile.velocity = (Main.MouseWorld - start).SafeNormalize(Vector2.UnitX);
 			}
 
 			Vector2 aim = Projectile.velocity.SafeNormalize(Vector2.UnitX);
 
-			// 直接改 position，不用 Center 赋值，避免和 netcode 打架。
-			Projectile.position = player.Center - Projectile.Size / 2f;
+			Projectile.Center = start;
 			Projectile.rotation = aim.ToRotation();
 			Projectile.ai[0] = MaxLength;
 
 			if (!Main.dedServ)
 			{
 				for (int i = 0; i < 12; i++)
-					Lighting.AddLight(player.Center + aim * (MaxLength * i / 12f), 0.43f, 0.045f, 0.095f);
+					Lighting.AddLight(start + aim * (MaxLength * i / 12f), 0.43f, 0.045f, 0.095f);
 			}
 
-			DealBeamDamage(player, aim);
+			DealBeamDamage(start, aim);
 		}
 
 		/// <summary>线段与敌人矩形求交，命中就结算伤害。8 帧无敌间隔防止每帧重复打。</summary>
-		private void DealBeamDamage(Player player, Vector2 aim)
+		private void DealBeamDamage(Vector2 start, Vector2 aim)
 		{
-			Vector2 start = player.Center;
 			Vector2 end = start + aim * MaxLength;
 
 			for (int i = 0; i < Main.maxNPCs; i++)
