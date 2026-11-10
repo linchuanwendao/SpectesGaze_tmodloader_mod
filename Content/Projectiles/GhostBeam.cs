@@ -76,7 +76,7 @@ namespace SpectesGaze.Content.Projectiles
 			if (!Main.dedServ)
 			{
 				for (int i = 0; i < 12; i++)
-					Lighting.AddLight(player.Center + aim * (MaxLength * i / 12f), 0.67f, 0.11f, 0.20f);
+					Lighting.AddLight(player.Center + aim * (MaxLength * i / 12f), 0.43f, 0.045f, 0.095f);
 			}
 
 			DealBeamDamage(player, aim);

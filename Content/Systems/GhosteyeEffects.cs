@@ -13,7 +13,7 @@ namespace SpectesGaze.Content.Systems
 		private const int MaxEffects = 384;
 		private static readonly List<Effect> Effects = new(MaxEffects);
 
-		private enum Shape { Ring, Spark, Thread, FreezeVeil }
+		private enum Shape { Ring, Spark, Thread, Rift, FreezeVeil }
 
 		private struct Effect
 		{
@@ -47,30 +47,20 @@ namespace SpectesGaze.Content.Systems
 
 		internal static void Open(Vector2 center, float radius)
 		{
-			Ring(center, radius * 0.14f, radius, Crimson, 34);
-			Ring(center, radius * 0.08f, radius * 0.92f, Ember, 27);
-			Burst(center, Crimson, 22, 7f);
+			Add(Shape.Rift, center, center, radius * 0.14f, radius, Crimson, 34);
+			Burst(center, Blood, 22, 7f);
 		}
 
 		internal static void Close(Vector2 center, float radius, bool overflowed)
 		{
-			Ring(center, radius, 12f, overflowed ? Ember : Crimson, 26);
+			Add(Shape.Rift, center, center, radius, 12f, overflowed ? Ember : Blood, 26);
 			if (overflowed) Burst(center, Crimson, 23, 8f);
 		}
 
 		internal static void Freeze(Vector2 center, float radius)
 		{
-			Add(Shape.FreezeVeil, center, center, radius, radius, new Color(24, 115, 195), 84);
-			Ring(center, 28f, 155f, new Color(203, 245, 255), 43);
-			Ring(center, 70f, 285f, Still, 55);
-			Ring(center, radius * 0.19f, radius, Still, 46);
-			Burst(center, Still, 20, 6f);
-			for (int i = 0; i < 12; i++)
-			{
-				Vector2 direction = (MathHelper.TwoPi * i / 12f).ToRotationVector2();
-				float length = i % 3 == 0 ? 36f : 15f;
-				Thread(center + direction * (148f - length), center + direction * 148f, Still, 44, 11f);
-			}
+			Add(Shape.FreezeVeil, center, center, radius, radius, new Color(44, 51, 73), 84);
+			Add(Shape.Rift, center, center, 30f, radius, Still, 46);
 		}
 
 		internal static void Restart(Vector2 center)
@@ -147,7 +137,7 @@ namespace SpectesGaze.Content.Systems
 			});
 		}
 
-		internal static void Draw()
+		internal static void Draw(float time, Rectangle view)
 		{
 			foreach (Effect effect in Effects)
 			{
@@ -169,10 +159,13 @@ namespace SpectesGaze.Content.Systems
 					case Shape.Thread:
 						DrawLine(effect.Position, effect.Target, size, color);
 						break;
+					case Shape.Rift:
+						DrawTornEdge(effect.Position, size, time, effect.Color, remaining * remaining, view);
+						break;
 					case Shape.FreezeVeil:
 						float opacity = Math.Min(1f, effect.Age / 4f + 0.25f) * remaining;
-						DrawGlow(effect.Position, new Vector2(size * 2f), effect.Color * (0.62f * opacity));
-						DrawGlow(effect.Position, new Vector2(290f), Light(Still, 0.35f * opacity * remaining));
+						DrawGlow(effect.Position, new Vector2(size * 2f), effect.Color * (0.41f * opacity));
+						DrawGlow(effect.Position, new Vector2(290f), Light(Still, 0.19f * opacity * remaining));
 						break;
 				}
 			}

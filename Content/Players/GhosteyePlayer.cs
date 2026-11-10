@@ -64,6 +64,9 @@ namespace SpectesGaze.Content.Players
 		/// <summary>兼容旧名字，UI 和渲染器都读这个。</summary>
 		public bool DomainActive => DomainOn;
 
+		internal Vector2 FloatingEyeCenter => Player.Center - Vector2.UnitY *
+			(Player.height * 0.5f + 54f - 5f * MathF.Sin(Main.GlobalTimeWrappedHourly * 2f));
+
 		// 记录上一帧的层数，用来检测"升层"事件。
 		private int lastTier;
 
@@ -413,12 +416,13 @@ namespace SpectesGaze.Content.Players
 
 			if (target == null) return;
 
-			Vector2 dir = (target.Center - Player.Center).SafeNormalize(Vector2.UnitX);
+			Vector2 origin = FloatingEyeCenter;
+			Vector2 dir = (target.Center - origin).SafeNormalize(Vector2.UnitX);
 			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(25f + tier * 8f);
 
 			Projectile.NewProjectile(
 				Player.GetSource_FromThis(),
-				Player.Center,
+				origin,
 				dir * 14f,
 				ModContent.ProjectileType<Projectiles.GhostBolt>(),
 				damage,

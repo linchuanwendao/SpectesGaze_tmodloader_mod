@@ -6,7 +6,7 @@ namespace SpectesGaze.Content.Buffs
 {
 	/// <summary>
 	/// 静止：被鬼域定住的生物完全不能动。
-	/// GhosteyeGlobalNPC.PostAI 锁定位置，DomainRenderer 绘制锁环。
+	/// GhosteyeGlobalNPC.PostAI 锁定位置，DomainRenderer 绘制贴身阴影。
 	/// </summary>
 	public class GhostStill : ModBuff
 	{

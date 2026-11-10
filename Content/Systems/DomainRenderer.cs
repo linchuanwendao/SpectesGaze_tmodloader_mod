@@ -14,8 +14,10 @@ namespace SpectesGaze.Content.Systems
 		internal static readonly Color Crimson = new(247, 36, 79);
 		internal static readonly Color Ember = new(255, 109, 129);
 		internal static readonly Color Pale = new(255, 224, 219);
-		internal static readonly Color Still = new(80, 196, 255);
+		internal static readonly Color Still = new(132, 151, 176);
 		internal static readonly Color Violet = new(194, 111, 255);
+		internal static readonly Color Blood = new(187, 22, 43);
+		private static readonly Color Shadow = new(17, 4, 13);
 
 		private const string EffectPath = "SpectesGaze/Content/Textures/Effects/";
 		private const float RingTextureRadius = 0.91f;
@@ -68,8 +70,8 @@ namespace SpectesGaze.Content.Systems
 			try
 			{
 				float time = Main.GlobalTimeWrappedHourly;
-				if (hasDomain) DrawDomain(player, time);
-				GhosteyeEffects.Draw();
+				if (hasDomain) DrawDomain(player, time, view);
+				GhosteyeEffects.Draw(time, view);
 				DrawNpcEffects(time, view);
 
 				for (int i = 0; i < Main.maxProjectiles; i++)
@@ -86,42 +88,39 @@ namespace SpectesGaze.Content.Systems
 			}
 		}
 
-		private void DrawDomain(Player player, float time)
+		private void DrawDomain(Player player, float time, Rectangle view)
 		{
 			int tier = GhosteyePlayer.CalculateTier();
 			float radius = GhosteyePlayer.DomainRadiusOf(tier);
 			Vector2 center = player.Center;
 			float fade = MathHelper.SmoothStep(0f, 1f, (domainAge + 1) / 23f);
-			float pulse = Wave(time * 2.4f);
-			Color red = Color.Lerp(Crimson, Violet, Math.Max(0, tier - 4) * 0.065f);
+			float pulse = Wave(time * 2.1f + MathF.Sin(time * 0.8f));
+			Color red = Color.Lerp(Blood, new Color(158, 33, 69), (tier - 1) / 9f);
 
-			// 暗雾用普通透明混合，边界、碎光和粒子才叠亮。
-			DrawGlow(center, new Vector2(radius * 2.05f), new Color(82, 8, 29) * (0.24f * fade));
-			for (int i = 0; i < 5; i++)
+			DrawGlow(center, new Vector2(radius * 2.15f), Shadow * (0.36f * fade));
+			for (int i = 0; i < 9; i++)
 			{
-				float angle = time * (i % 2 == 0 ? 0.21f : -0.16f) + i * 2.4f;
-				Vector2 offset = angle.ToRotationVector2() * radius * (0.3f + 0.08f * i);
-				DrawGlow(center + offset, new Vector2(radius * 0.74f, radius * 0.34f),
-					new Color(108, 18, 52) * (0.13f * fade), angle + MathHelper.PiOver2);
+				float phase = i * 2.39996f;
+				float angle = phase + 0.3f * MathF.Sin(time * 0.4f + phase);
+				float drift = Wave(time * (0.6f + i * 0.07f) + phase);
+				Vector2 offset = angle.ToRotationVector2() * radius * (0.2f + 0.55f * drift);
+				DrawGlow(center + offset, new Vector2(radius * 0.92f, radius * 0.28f),
+					new Color(64, 7, 26) * (fade * (0.17f + 0.18f * drift)), angle + 0.7f);
 			}
 
-			Texture2D border = ModContent.Request<Texture2D>(EffectPath + "DomainRing").Value;
-			Stamp(border, center, new Vector2(radius * border.Width / 500f),
-				Color.White * (0.22f * fade), time * 0.13f);
-			DrawRing(center, radius, Light(red, (0.36f + 0.12f * pulse) * fade));
-			DrawRing(center, radius * 0.94f, Light(red, 0.11f * fade));
-			DrawOrbit(center, radius, time * 0.31f, 12 + tier * 2, red, fade * 0.75f);
-			DrawOrbit(center, radius * 0.90f, -time * 0.22f, 12, red, fade * 0.28f);
+			DrawTornEdge(center, radius, time, red, fade, view);
 
-			int motes = 18 + 2 * tier;
+			int motes = 14 + 2 * tier;
 			for (int i = 0; i < motes; i++)
 			{
-				float drift = time * 0.32f + i * 2.39996f;
+				float phase = i * 2.39996f;
+				float drift = phase + 0.22f * MathF.Sin(time * 0.72f + phase);
 				float depth = (i * 17 % motes + 0.5f) / motes;
-				Vector2 point = center + drift.ToRotationVector2() * radius * (0.18f + 0.76f * depth);
-				float shine = Wave(time * 3f + i * 1.7f);
-				DrawGlow(point, new Vector2(7f + 8f * depth, 2f + 4f * shine),
-					Light(i % 5 == 0 ? Pale : red, fade * shine * 0.58f), drift + MathHelper.PiOver2);
+				float fall = Wave(time * 0.94f + phase);
+				Vector2 point = center + drift.ToRotationVector2() * radius * (0.16f + 0.73f * depth)
+					+ Vector2.UnitY * (fall * 26f);
+				DrawGlow(point, new Vector2(3f + 4f * depth, 6f + 11f * fall),
+					Light(red, fade * fall * 0.45f), MathF.Sin(phase) * 0.4f);
 			}
 
 			Texture2D core = ModContent.Request<Texture2D>(EffectPath + "DomainCore").Value;
@@ -131,13 +130,62 @@ namespace SpectesGaze.Content.Systems
 
 			if (tier < 3) return;
 			Texture2D eye = ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
-			Vector2 eyePos = center + new Vector2(0f, -player.height / 2f - 54f + 5f * MathF.Sin(time * 2f));
+			Vector2 eyePos = player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
 			float eyeSize = 44f + tier * 3f + pulse * 3f;
-			DrawGlow(eyePos, new Vector2(eyeSize * 2.2f, eyeSize * 1.7f), Light(red, fade * 0.42f));
-			DrawOrbit(eyePos, eyeSize * 0.7f, -time * 0.85f, 8, red, fade * 0.52f);
-			Stamp(eye, eyePos, new Vector2(eyeSize, eyeSize * (0.9f + pulse * 0.1f)),
-				Color.White * fade, MathF.Sin(time * 1.6f) * 0.06f);
+			DrawGlow(eyePos, new Vector2(eyeSize * 2.5f, eyeSize * 2f), Shadow * (0.74f * fade));
+			DrawGlow(eyePos, new Vector2(eyeSize * 1.6f, eyeSize * 1.3f), Light(red, fade * 0.4f));
+			for (int i = -2; i <= 2; i++)
+			{
+				float curl = MathF.Sin(time * 2.8f + i * 2.4f);
+				Vector2 root = eyePos + new Vector2(i * eyeSize * 0.17f, eyeSize * 0.19f);
+				Vector2 bend = root + new Vector2(i * 3f + curl * 6f, eyeSize * 0.32f);
+				Vector2 tip = bend + new Vector2(-i * 4f + curl * 7f, 9f + 5f * Math.Abs(i));
+				DrawLine(root, bend, 7f, Light(red, fade * 0.55f));
+				DrawLine(bend, tip, 3f, Light(red, fade * 0.34f));
+			}
+			float blink = MathF.Pow(Wave(time * 1.4f + MathF.Sin(time * 0.81f)), 38f);
+			Stamp(eye, eyePos, new Vector2(eyeSize, eyeSize * (1f - blink * 0.67f)),
+				Color.White * fade, MathF.Sin(time * 1.6f) * 0.07f);
 		}
+
+		internal static void DrawTornEdge(Vector2 center, float radius, float time, Color color, float opacity, Rectangle view)
+		{
+			const int segments = 96;
+			Vector2 previous = center + Vector2.UnitX * (radius * EdgeScale(0f, time));
+			for (int i = 1; i <= segments; i++)
+			{
+				float angle = MathHelper.TwoPi * i / segments;
+				Vector2 radial = angle.ToRotationVector2();
+				Vector2 point = center + radial * (radius * EdgeScale(angle, time));
+				// view 已包含留边，屏幕外的边缘和向内伸出的血丝可以一起跳过。
+				if (!view.Contains((int)point.X, (int)point.Y) && !view.Contains((int)previous.X, (int)previous.Y))
+				{
+					previous = point;
+					continue;
+				}
+				float fray = Wave(angle * 19f - time * 1.8f + MathF.Sin(angle * 7f) * 2f);
+				DrawLine(previous, point, 11f + radius * 0.058f, Shadow * (0.60f * opacity));
+				DrawLine(previous, point, 3f + fray * (4f + radius * 0.013f),
+					Light(color, opacity * (0.19f + fray * 0.63f)));
+
+				if (i % 4 == 0)
+				{
+					Vector2 tangent = new(-radial.Y, radial.X);
+					float length = radius * (0.025f + 0.10f * fray);
+					float curl = MathF.Sin(angle * 13f - time * 1.1f);
+					Vector2 bend = point - radial * length * 0.46f + tangent * curl * length * 0.47f;
+					Vector2 tip = point - radial * length - tangent * curl * length * 0.28f;
+					DrawLine(point, bend, 3f + fray * 5f, Light(color, opacity * fray * 0.72f));
+					DrawLine(bend, tip, 2f + fray * 2f, Light(color, opacity * fray * 0.45f));
+				}
+				previous = point;
+			}
+		}
+
+		private static float EdgeScale(float angle, float time) => 0.99f
+			+ 0.017f * MathF.Sin(9f * angle - time * 1.1f)
+			+ 0.011f * MathF.Sin(27f * angle + time * 1.5f)
+			+ 0.005f * MathF.Sin(43f * angle - time * 2f);
 
 		private static void DrawOrbit(Vector2 center, float radius, float phase, int count, Color color, float strength)
 		{
@@ -165,42 +213,49 @@ namespace SpectesGaze.Content.Systems
 			float fade = MathHelper.Clamp(Math.Min(age / 4f, (GhostBeam.Duration - age) / 12f), 0f, 1f);
 			if (fade <= 0f) return;
 			float flare = MathHelper.Clamp(1f - age / 16f, 0f, 1f);
-			float width = GhostBeam.Thickness * (0.81f + 0.13f * Wave(time * 25f) + flare * 0.26f);
-			DrawLine(start, end, width * 2.5f, Light(Crimson, fade * 0.31f));
-			DrawLine(start, end, width * 1.35f, Light(Crimson, fade * 0.66f));
-			DrawLine(start, end, width * 0.57f, Light(Ember, fade * 0.84f));
-			DrawLine(start, end, width * 0.18f, Light(Pale, fade * 0.94f));
-
+			float width = GhostBeam.Thickness * (0.78f + 0.12f * Wave(time * 17f) + flare * 0.24f);
 			Vector2 normal = new(-aim.Y, aim.X);
-			for (int lane = -1; lane <= 1; lane += 2)
-			{
-				Vector2 previous = start;
-				for (int i = 1; i <= 32; i++)
-				{
-					float u = i / 32f;
-					float spread = MathF.Sin(MathHelper.Pi * u) * width * 0.52f;
-					float wave = 0.63f + MathF.Sin(u * 37f - time * 23f + lane) * 0.44f;
-					Vector2 point = Vector2.Lerp(start, end, u) + normal * (lane * spread * wave);
-					DrawLine(previous, point, 7f + 3f * Wave(u * 41f - time * 34f),
-						Light(lane == 1 ? Ember : Violet, fade * 0.70f));
-					previous = point;
-				}
-			}
+			DrawLine(start, end, width * 2.2f, Shadow * (fade * 0.65f));
+			DrawLine(start, end, width * 1.4f, Light(Blood, fade * 0.27f));
 
-			for (int i = 0; i < 17; i++)
+			// 窄而暗的裂心，两侧是宽窄交替的血色撕口。
+			const int segments = 48;
+			Vector2 previous = start;
+			Vector2 previousLip = Vector2.Zero;
+			for (int i = 1; i <= segments; i++)
 			{
-				float cycle = time * (1.4f + (i % 3) * 0.23f) + i * 0.618f;
-				float u = cycle - MathF.Floor(cycle);
-				float edge = MathF.Sin(MathHelper.Pi * u);
-				Vector2 point = Vector2.Lerp(start, end, u) + normal * (width * 0.75f * MathF.Sin(i * 3.8f) * edge);
-				DrawGlow(point, new Vector2(65f + i % 4 * 28f, 4f + i % 3 * 2f),
-					Light(i % 3 == 0 ? Pale : Ember, fade * edge * 0.8f), aim.ToRotation());
+				float u = i / (float)segments;
+				float taper = MathF.Sin(MathHelper.Pi * u);
+				float twitch = MathF.Sin(u * 71f - time * 16f) + 0.37f * MathF.Sin(u * 113f + time * 24f);
+				Vector2 point = Vector2.Lerp(start, end, u) + normal * (twitch * width * 0.13f * taper);
+				float tear = Wave(u * 39f - time * 13f + MathF.Sin(u * 63f) * 1.9f);
+				Vector2 lip = normal * (width * (0.04f + 0.14f * tear) * taper);
+				DrawLine(previous, point, width * (0.28f + 0.28f * tear), Light(Blood, fade * 0.83f));
+				DrawLine(previous, point, width * (0.12f + 0.13f * tear), Shadow * (fade * 0.92f));
+				DrawLine(previous + previousLip, point + lip, 4f + tear * 7f,
+					Light(Ember, fade * (0.24f + 0.55f * tear)));
+				DrawLine(previous - previousLip * 0.7f, point - lip * 0.7f, 3f + tear * 4f,
+					Light(Crimson, fade * (0.27f + 0.38f * tear)));
+
+				if (i % 4 == 0 && i < segments)
+				{
+					float side = i % 8 == 0 ? -1f : 1f;
+					float reach = width * side * taper * (0.46f + 0.34f * tear);
+					Vector2 branch = point + aim * (7f + 17f * tear) + normal * (reach * 0.62f);
+					Vector2 tip = point - aim * (16f + 21f * tear) + normal * reach;
+					DrawLine(point, branch, 4f + tear * 4f, Light(Blood, fade * (0.38f + 0.46f * tear)));
+					DrawLine(branch, tip, 3f, Light(Crimson, fade * (0.22f + 0.46f * tear)));
+					DrawGlow(tip + Vector2.UnitY * (8f + tear * 16f), new Vector2(4f, 8f + tear * 7f),
+						Light(Blood, fade * tear * 0.73f), 0.18f * side);
+				}
+				previous = point;
+				previousLip = lip;
 			}
 
 			Texture2D core = ModContent.Request<Texture2D>(EffectPath + "DomainCore").Value;
-			Stamp(core, start, new Vector2(width * 1.25f), Color.White * (fade * 0.78f), time * 4f);
-			DrawGlow(start, new Vector2(width * 2.5f), Light(Ember, fade * (0.62f + flare * 0.3f)));
-			DrawGlow(end, new Vector2(width * 0.75f), Light(Ember, fade * 0.55f));
+			Stamp(core, start, new Vector2(width * 1.15f, width * (1.14f + flare * 0.45f)),
+				new Color(255, 131, 148) * (fade * 0.88f), aim.ToRotation() + MathF.Sin(time * 10f) * 0.16f);
+			DrawGlow(start, new Vector2(width * 1.85f), Light(Blood, fade * (0.36f + flare * 0.35f)));
 		}
 
 		private static void DrawBolt(Projectile projectile)
@@ -253,9 +308,8 @@ namespace SpectesGaze.Content.Systems
 
 				if (npc.HasBuff(stillType))
 				{
-					DrawGlow(center, new Vector2(size * 2.9f), new Color(21, 111, 178) * 0.46f);
-					DrawRing(center, size, Light(new Color(185, 232, 255), 0.82f));
-					DrawOrbit(center, size * 1.18f, i * 2.4f, 8, Still, 0.97f);
+					DrawGlow(center, new Vector2(size * 2.25f, size * 2.9f),
+						new Color(32, 24, 43) * 0.38f, 0.18f);
 				}
 				else if (npc.HasBuff(slowType))
 				{
