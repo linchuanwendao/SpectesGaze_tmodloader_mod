@@ -1,9 +1,7 @@
-using System;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using Terraria;
-using Terraria.ID;
 using Terraria.ModLoader;
+using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.Projectiles
 {
@@ -21,7 +19,7 @@ namespace SpectesGaze.Content.Projectiles
 		/// <summary>光束最大长度。</summary>
 		public const float MaxLength = 1600f;
 
-		/// <summary>光束视觉厚度，也是伤害判定的宽容范围。想让激光更粗就改这个数。</summary>
+		/// <summary>光束的基准视觉厚度。</summary>
 		public const float Thickness = 80f;
 
 		/// <summary>持续帧数。90 帧 = 1.5 秒。</summary>
@@ -40,7 +38,6 @@ namespace SpectesGaze.Content.Projectiles
 			Projectile.ignoreWater = true;
 			Projectile.DamageType = DamageClass.Generic;
 			Projectile.netImportant = true;
-			Projectile.light = 0.9f;
 
 			// 只做兜底，真正的存活由 ai[1] 控制。
 			Projectile.timeLeft = 600;
@@ -76,13 +73,10 @@ namespace SpectesGaze.Content.Projectiles
 			Projectile.rotation = aim.ToRotation();
 			Projectile.ai[0] = MaxLength;
 
-			if (Main.netMode != NetmodeID.Server && Main.rand.NextBool(2))
+			if (!Main.dedServ)
 			{
-				float t = Main.rand.NextFloat();
-				Vector2 pos = player.Center + aim * (t * MaxLength);
-				Dust d = Dust.NewDustDirect(pos, 1, 1, DustID.Blood, 0f, 0f, 0, default, 1.3f);
-				d.noGravity = true;
-				d.velocity *= 0.2f;
+				for (int i = 0; i < 12; i++)
+					Lighting.AddLight(player.Center + aim * (MaxLength * i / 12f), 0.67f, 0.11f, 0.20f);
 			}
 
 			DealBeamDamage(player, aim);
@@ -105,27 +99,11 @@ namespace SpectesGaze.Content.Projectiles
 				npc.SimpleStrikeNPC(Projectile.damage, dir);
 				npc.immune[Projectile.owner] = 8;
 
-				if (Main.netMode != NetmodeID.Server)
-				{
-					for (int k = 0; k < 6; k++)
-					{
-						Vector2 vel = Main.rand.NextVector2Circular(4f, 4f);
-						Dust d = Dust.NewDustDirect(npc.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.3f);
-						d.noGravity = true;
-					}
-				}
+				GhosteyeEffects.Impact(npc.Center, beam: true);
 			}
 		}
 
-		/// <summary>
-		/// 弹幕自己不做绘制。
-		/// 实测 Projectile.PreDraw 这条路画不出来（有伤害但看不到光束），
-		/// 改由 DomainRenderer 在 PostDrawTiles 里统一画，那条路径已验证可靠。
-		/// 返回 false 只是阻止默认贴图绘制，实际画面由渲染器负责。
-		/// </summary>
-		public override bool PreDraw(ref Color lightColor)
-		{
-			return false;
-		}
+		// 统一由 DomainRenderer 绘制整段光束。
+		public override bool PreDraw(ref Color lightColor) => false;
 	}
 }

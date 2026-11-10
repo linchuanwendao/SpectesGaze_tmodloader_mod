@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
+using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.Projectiles
 {
@@ -11,6 +12,12 @@ namespace SpectesGaze.Content.Projectiles
 	/// </summary>
 	public class GhostBolt : ModProjectile
 	{
+		public override void SetStaticDefaults()
+		{
+			ProjectileID.Sets.TrailCacheLength[Type] = 11;
+			ProjectileID.Sets.TrailingMode[Type] = 0;
+		}
+
 		public override void SetDefaults()
 		{
 			Projectile.width = 14;
@@ -22,7 +29,6 @@ namespace SpectesGaze.Content.Projectiles
 			Projectile.ignoreWater = true;
 			Projectile.timeLeft = 140;
 			Projectile.DamageType = DamageClass.Generic;
-			Projectile.light = 0.6f;
 		}
 
 		public override void AI()
@@ -39,12 +45,8 @@ namespace SpectesGaze.Content.Projectiles
 				Projectile.velocity = Vector2.Lerp(Projectile.velocity, desired * Projectile.velocity.Length(), 0.06f);
 			}
 
-			if (Main.netMode != NetmodeID.Server && Main.rand.NextBool(2))
-			{
-				Dust d = Dust.NewDustDirect(Projectile.position, Projectile.width, Projectile.height, DustID.Blood, 0f, 0f, 0, default, 0.9f);
-				d.noGravity = true;
-				d.velocity *= 0.3f;
-			}
+			if (!Main.dedServ)
+				Lighting.AddLight(Projectile.Center, 0.58f, 0.09f, 0.17f);
 		}
 
 		private NPC FindTarget()
@@ -68,16 +70,8 @@ namespace SpectesGaze.Content.Projectiles
 			return best;
 		}
 
-		public override void OnKill(int timeLeft)
-		{
-			if (Main.netMode == NetmodeID.Server) return;
+		public override void OnKill(int timeLeft) => GhosteyeEffects.Impact(Projectile.Center, beam: false);
 
-			for (int i = 0; i < 10; i++)
-			{
-				Vector2 vel = Main.rand.NextVector2Circular(4f, 4f);
-				Dust d = Dust.NewDustDirect(Projectile.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.1f);
-				d.noGravity = true;
-			}
-		}
+		public override bool PreDraw(ref Color lightColor) => false;
 	}
 }

@@ -48,6 +48,12 @@ namespace SpectesGaze.Content.NPCs
 			}
 		}
 
+		/// <summary>清空冻结记录。世界切换或重载时用。</summary>
+		public static void ClearHistory()
+		{
+			FrozenPositions.Clear();
+		}
+
 		/// <summary>
 		/// 鬼火灼烧的持续伤害。层数越高烧得越快：
 		/// 4 层 30/秒，5~6 层 60/秒，7 层以上 150/秒。

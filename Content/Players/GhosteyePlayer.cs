@@ -7,6 +7,8 @@ using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 using SpectesGaze.Content.Buffs;
+using SpectesGaze.Content.NPCs;
+using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.Players
 {
@@ -83,6 +85,12 @@ namespace SpectesGaze.Content.Players
 		/// <summary>鬼域开着时每秒涨多少复苏值。</summary>
 		private const float RevivalDrainPerTick = 0.025f;
 
+		/// <summary>进入世界时清空上个世界残留的时间快照。</summary>
+		public override void OnEnterWorld()
+		{
+			GhosteyeGlobalNPC.ClearHistory();
+		}
+
 		// ================= 装备流程 =================
 
 		/// <summary>物品被使用时调用，完成"吞噬"。</summary>
@@ -103,15 +111,7 @@ namespace SpectesGaze.Content.Players
 
 			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.8f, Pitch = -0.6f }, Player.Center);
 
-			if (Main.netMode != NetmodeID.Server)
-			{
-				for (int i = 0; i < 40; i++)
-				{
-					Vector2 vel = Main.rand.NextVector2Circular(6f, 6f);
-					Dust d = Dust.NewDustDirect(Player.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.6f);
-					d.noGravity = true;
-				}
-			}
+			GhosteyeEffects.Awaken(Player.Center);
 		}
 
 		// ================= 每帧更新 =================
@@ -148,6 +148,7 @@ namespace SpectesGaze.Content.Players
 				if (Main.netMode != NetmodeID.Server && Player.whoAmI == Main.myPlayer)
 				{
 					Main.NewText($"鬼眼已成长至第 {tier} 层", 200, 60, 60);
+					GhosteyeEffects.Awaken(Player.Center);
 				}
 			}
 			lastTier = tier;
@@ -297,6 +298,17 @@ namespace SpectesGaze.Content.Players
 			}
 		}
 
+		/// <summary>
+		/// 技能消耗随层数递减。技能每被超越一层，消耗降 15%，最低保留 20%。
+		/// 这是设计文档里"层数越高，之前等级的技能消耗越少"的实现，
+		/// 也是第八层往上唯一还在增长的东西。
+		/// </summary>
+		private float SkillCost(float baseCost, int skillTier)
+		{
+			int gap = Math.Max(0, CalculateTier() - skillTier);
+			return baseCost * Math.Max(0.2f, 1f - gap * 0.15f);
+		}
+
 		/// <summary>测试用。把复苏值直接清零，省得等自然回落。</summary>
 		public void ResetRevival()
 		{
@@ -332,7 +344,8 @@ namespace SpectesGaze.Content.Players
 			}
 
 			StillCooldown = 60 * 30;
-			Revival = Math.Min(MaxRevival, Revival + 12f);
+			Revival = Math.Min(MaxRevival, Revival + SkillCost(12f, 6));
+			GhosteyeEffects.Freeze(Player.Center, radius);
 
 			if (count > 0)
 			{
@@ -368,20 +381,12 @@ namespace SpectesGaze.Content.Players
 				i--;
 			}
 
-			RestartCooldown = 60 * 30;
-			Revival = Math.Min(MaxRevival, Revival + 18f);
+			// 第八层起，重启自身的冷却从 30 秒降到 10 秒。
+			RestartCooldown = 60 * (CalculateTier() >= 8 ? 10 : 30);
+			Revival = Math.Min(MaxRevival, Revival + SkillCost(18f, 7));
 
 			SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.9f, Pitch = -0.5f }, Player.Center);
-
-			if (Main.netMode != NetmodeID.Server)
-			{
-				for (int i = 0; i < 30; i++)
-				{
-					Vector2 vel = Main.rand.NextVector2Circular(5f, 5f);
-					Dust d = Dust.NewDustDirect(Player.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.4f);
-					d.noGravity = true;
-				}
-			}
+			GhosteyeEffects.Restart(Player.Center);
 		}
 
 		/// <summary>
@@ -447,7 +452,7 @@ namespace SpectesGaze.Content.Players
 				Player.whoAmI);
 
 			BeamCooldown = 60 * (tier >= 6 ? 10 : 20);
-			Revival = Math.Min(MaxRevival, Revival + 8f);
+			Revival = Math.Min(MaxRevival, Revival + SkillCost(8f, 5));
 
 			SoundEngine.PlaySound(SoundID.Item72 with { Volume = 0.9f, Pitch = -0.2f }, Player.Center);
 		}
@@ -468,11 +473,12 @@ namespace SpectesGaze.Content.Players
 			}
 
 			DomainOn = true;
-			Revival = Math.Min(MaxRevival, Revival + 10f);
+			Revival = Math.Min(MaxRevival, Revival + SkillCost(10f, 1));
 
 			// 开启瞬间：范围内所有敌人挂上凝视。
 			int tier = CalculateTier();
 			float radius = DomainRadiusOf(tier);
+			GhosteyeEffects.Open(Player.Center, radius);
 
 			for (int i = 0; i < Main.maxNPCs; i++)
 			{
@@ -481,11 +487,7 @@ namespace SpectesGaze.Content.Players
 				if (Vector2.DistanceSquared(npc.Center, Player.Center) > radius * radius) continue;
 
 				npc.AddBuff(ModContent.BuffType<GhastlyGaze>(), 300);
-
-				if (Main.netMode != NetmodeID.Server)
-				{
-					SpawnGazeLine(Player.Center, npc.Center);
-				}
+				GhosteyeEffects.Gaze(Player.Center, npc.Center);
 			}
 
 			SoundEngine.PlaySound(SoundID.Item14 with { Volume = 0.6f, Pitch = -0.5f }, Player.Center);
@@ -494,6 +496,7 @@ namespace SpectesGaze.Content.Players
 		private void CloseDomain(bool overflowed)
 		{
 			DomainOn = false;
+			GhosteyeEffects.Close(Player.Center, DomainRadiusOf(CalculateTier()), overflowed);
 
 			if (overflowed)
 			{
@@ -531,31 +534,11 @@ namespace SpectesGaze.Content.Players
 			// 视线要通，防止隔着墙瞬移。
 			if (!Collision.CanHitLine(Player.Center, 1, 1, target, 1, 1)) return;
 
-			if (Main.netMode != NetmodeID.Server)
-			{
-				for (int i = 0; i < 16; i++)
-				{
-					Vector2 vel = Main.rand.NextVector2Circular(4f, 4f);
-					Dust d = Dust.NewDustDirect(Player.Center, 1, 1, DustID.Blood, vel.X, vel.Y, 0, default, 1.3f);
-					d.noGravity = true;
-				}
-			}
-
+			Vector2 from = Player.Center;
 			Player.Teleport(checkPos, 1);
 			Player.velocity = Vector2.Zero;
 			Revival = Math.Min(MaxRevival, Revival + 3f);
-		}
-
-		private static void SpawnGazeLine(Vector2 from, Vector2 to)
-		{
-			int steps = 12;
-			for (int i = 0; i < steps; i++)
-			{
-				Vector2 pos = Vector2.Lerp(from, to, i / (float)steps);
-				Dust d = Dust.NewDustDirect(pos, 1, 1, DustID.Blood, 0f, 0f, 0, default, 1.1f);
-				d.noGravity = true;
-				d.velocity *= 0.2f;
-			}
+			GhosteyeEffects.Teleport(from, Player.Center);
 		}
 
 		// ================= 层数判定 =================

@@ -1,6 +1,4 @@
-using Microsoft.Xna.Framework;
 using Terraria;
-using Terraria.ID;
 using Terraria.ModLoader;
 
 namespace SpectesGaze.Content.Buffs
@@ -27,16 +25,6 @@ namespace SpectesGaze.Content.Buffs
 
 			player.GetDamage(DamageClass.Generic) += 0.15f;
 			player.GetCritChance(DamageClass.Generic) += 8f;
-
-			// 猩红粒子表示鬼域笼罩。只在客户端跑，服务器不需要。
-			if (Main.netMode != NetmodeID.Server && Main.rand.NextBool(3))
-			{
-				Dust d = Dust.NewDustDirect(
-					player.position, player.width, player.height,
-					DustID.Blood, 0f, 0f, 0, default, 1.2f);
-				d.noGravity = true;
-				d.velocity *= 0.35f;
-			}
 		}
 	}
 }
