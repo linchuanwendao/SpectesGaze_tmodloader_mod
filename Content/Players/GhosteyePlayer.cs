@@ -7,7 +7,6 @@ using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 using SpectesGaze.Content.Buffs;
-using SpectesGaze.Content.NPCs;
 using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.Players
@@ -58,6 +57,9 @@ namespace SpectesGaze.Content.Players
 		/// <summary>重启自身的冷却剩余时间（帧）。</summary>
 		public int RestartCooldown;
 
+		/// <summary>第八层大范围重启的冷却剩余时间（帧）。</summary>
+		public int RewindCooldown;
+
 		// 被动小激光的发射计时，累计到阈值就打一发。
 		private int boltTimer;
 
@@ -87,12 +89,6 @@ namespace SpectesGaze.Content.Players
 
 		/// <summary>鬼域开着时每秒涨多少复苏值。</summary>
 		private const float RevivalDrainPerTick = 0.025f;
-
-		/// <summary>进入世界时清空上个世界残留的时间快照。</summary>
-		public override void OnEnterWorld()
-		{
-			GhosteyeGlobalNPC.ClearHistory();
-		}
 
 		// ================= 装备流程 =================
 
@@ -127,6 +123,7 @@ namespace SpectesGaze.Content.Players
 			if (BeamCooldown > 0) BeamCooldown--;
 			if (StillCooldown > 0) StillCooldown--;
 			if (RestartCooldown > 0) RestartCooldown--;
+			if (RewindCooldown > 0) RewindCooldown--;
 
 			// 鬼域开启期间：每帧续一次 buff 保持常驻，同时复苏值持续上涨。
 			if (DomainOn)
@@ -294,6 +291,11 @@ namespace SpectesGaze.Content.Players
 				}
 			}
 
+			if (SpectesGaze.RewindKey?.JustPressed == true && DomainOn && CalculateTier() >= DomainRewind.RequiredTier)
+			{
+				TryRewindDomain();
+			}
+
 			// 测试用：清零复苏值。正式发布前删掉这段。
 			if (SpectesGaze.ResetKey != null && SpectesGaze.ResetKey.JustPressed)
 			{
@@ -390,6 +392,31 @@ namespace SpectesGaze.Content.Players
 
 			SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.9f, Pitch = -0.5f }, Player.Center);
 			GhosteyeEffects.Restart(Player.Center);
+		}
+
+		private void TryRewindDomain()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer)
+			{
+				Main.NewText("大范围重启目前仅在单人模式可用。", 190, 130, 145);
+				return;
+			}
+			if (RewindCooldown > 0)
+			{
+				Main.NewText($"大范围重启还在冷却，{(RewindCooldown + 59) / 60} 秒。", 160, 60, 60);
+				return;
+			}
+
+			float radius = DomainRadiusOf(CalculateTier());
+			if (!ModContent.GetInstance<DomainRewind>().TryStartRewind(Player.Center, radius))
+			{
+				Main.NewText("鬼域内没有可回退的敌人。", 190, 130, 145);
+				return;
+			}
+
+			RewindCooldown = 60 * 30;
+			Revival = Math.Min(MaxRevival, Revival + SkillCost(25f, DomainRewind.RequiredTier));
+			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.75f, Pitch = -0.7f }, Player.Center);
 		}
 
 		/// <summary>

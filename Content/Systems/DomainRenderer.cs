@@ -73,6 +73,7 @@ namespace SpectesGaze.Content.Systems
 				float time = Main.GlobalTimeWrappedHourly;
 				if (hasDomain) DrawDomain(player, time, view);
 				GhosteyeEffects.Draw(time, view);
+				ModContent.GetInstance<DomainRewind>().DrawPlayback(time, view);
 				DrawNpcEffects(time, view);
 
 				Vector2? firingEye = null;

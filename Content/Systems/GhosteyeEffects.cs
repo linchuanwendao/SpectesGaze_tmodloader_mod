@@ -75,6 +75,38 @@ namespace SpectesGaze.Content.Systems
 			}
 		}
 
+		internal static float DrawRewind(Vector2 center, float radius, float progress, float time, Rectangle view)
+		{
+			float opening = MathHelper.SmoothStep(0f, 1f, progress / 0.16f);
+			float closing = MathHelper.SmoothStep(0f, 1f, (progress - 0.78f) / 0.22f);
+			float strength = opening * (1f - closing);
+
+			DrawGlow(center, new Vector2(radius * 1.8f), new Color(38, 5, 24) * (0.35f * strength));
+			float edgeRadius = MathHelper.SmoothStep(radius, 32f, progress);
+			DrawTornEdge(center, edgeRadius, time - progress * 6f, new Color(182, 62, 118), strength, view);
+			DrawRing(center, MathHelper.Lerp(78f, 18f, progress), Light(Blood, 0.5f * strength));
+
+			if (closing > 0f)
+			{
+				DrawRing(center, MathHelper.Lerp(20f, 92f, closing),
+					Light(Ember, 0.56f * MathF.Sin(MathHelper.Pi * closing)));
+			}
+
+			return strength;
+		}
+
+		internal static void DrawRewindEcho(Vector2 from, Vector2 to, float strength)
+		{
+			Vector2 drift = to - from;
+			float distance = drift.Length();
+			if (distance < 1f || strength <= 0f) return;
+
+			// 历史中的远距离瞬移用分离的残影表现，避免血线横穿整屏。
+			Color tint = Light(new Color(183, 47, 94), strength * 0.77f);
+			if (distance <= 96f) DrawLine(from, to, 12f * strength, tint);
+			DrawGlow(to, new Vector2(Math.Min(distance + 13f, 50f), 13f + 11f * strength), tint, drift.ToRotation());
+		}
+
 		internal static void Teleport(Vector2 from, Vector2 to)
 		{
 			Ring(from, 40f, 8f, Crimson, 24);

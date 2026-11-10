@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Terraria;
-using Terraria.ID;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Buffs;
 using SpectesGaze.Content.Players;
@@ -13,8 +11,71 @@ namespace SpectesGaze.Content.NPCs
 	/// </summary>
 	public class GhosteyeGlobalNPC : GlobalNPC
 	{
-		// 静止期间锁定的位置。key 是 npc.whoAmI。
-		private static readonly Dictionary<int, Vector2> FrozenPositions = new();
+		internal const int HistoryTicks = 120;
+		private Vector2? frozenPosition;
+		private Vector2[] positionHistory;
+		private int nextSnapshot;
+		private int snapshotCount;
+		private uint lastSnapshotTick;
+
+		public override bool InstancePerEntity => true;
+
+		public override void SetDefaults(NPC npc)
+		{
+			frozenPosition = null;
+			nextSnapshot = 0;
+			snapshotCount = 0;
+		}
+
+		internal void RecordPosition(NPC npc, uint tick)
+		{
+			positionHistory ??= new Vector2[HistoryTicks];
+			if (tick != lastSnapshotTick + 1) snapshotCount = 0;
+
+			positionHistory[nextSnapshot] = npc.position;
+			nextSnapshot = (nextSnapshot + 1) % HistoryTicks;
+			if (snapshotCount < HistoryTicks) snapshotCount++;
+			lastSnapshotTick = tick;
+		}
+
+		internal bool TryGetPastPosition(uint tick, out Vector2 position)
+		{
+			if (snapshotCount == HistoryTicks && lastSnapshotTick == tick)
+			{
+				position = positionHistory[nextSnapshot];
+				return true;
+			}
+
+			position = default;
+			return false;
+		}
+
+		internal Vector2[] CaptureRewindPath(Vector2 currentPosition)
+		{
+			// 由旧到新复制快照，实时记录可继续使用原来的环形缓冲。
+			Vector2[] path = new Vector2[HistoryTicks + 1];
+			int firstPart = HistoryTicks - nextSnapshot;
+			System.Array.Copy(positionHistory, nextSnapshot, path, 0, firstPart);
+			System.Array.Copy(positionHistory, 0, path, firstPart, nextSnapshot);
+			path[HistoryTicks] = currentPosition;
+			return path;
+		}
+
+		internal bool HasRecordedMovement(Vector2 currentPosition)
+		{
+			foreach (Vector2 sample in positionHistory)
+			{
+				if (sample != currentPosition) return true;
+			}
+			return false;
+		}
+
+		internal void MoveToPastPosition(NPC npc, Vector2 position)
+		{
+			npc.position = position;
+			npc.oldPosition = position;
+			if (frozenPosition.HasValue) frozenPosition = position;
+		}
 
 		public override void PostAI(NPC npc)
 		{
@@ -26,19 +87,13 @@ namespace SpectesGaze.Content.NPCs
 			{
 				// 第一次进入静止时记住位置，之后每帧强制拉回去。
 				// 只清 velocity 不够，有些 AI 直接改 position（瞬移类）。
-				if (!FrozenPositions.TryGetValue(npc.whoAmI, out Vector2 pos))
-				{
-					pos = npc.position;
-					FrozenPositions[npc.whoAmI] = pos;
-				}
-
-				npc.position = pos;
+				frozenPosition ??= npc.position;
+				npc.position = frozenPosition.Value;
 				npc.velocity = Vector2.Zero;
 				return;
 			}
 
-			// 脱离静止后清掉记录，避免 whoAmI 复用导致位置错乱。
-			FrozenPositions.Remove(npc.whoAmI);
+			frozenPosition = null;
 
 			if (slowed)
 			{
@@ -46,12 +101,6 @@ namespace SpectesGaze.Content.NPCs
 				// 0.88 配合各种怪自己的摩擦，大约相当于减速 30%。
 				npc.velocity *= 0.88f;
 			}
-		}
-
-		/// <summary>清空冻结记录。世界切换或重载时用。</summary>
-		public static void ClearHistory()
-		{
-			FrozenPositions.Clear();
 		}
 
 		/// <summary>

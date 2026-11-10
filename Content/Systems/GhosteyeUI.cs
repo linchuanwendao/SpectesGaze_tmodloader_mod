@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
+using Terraria.ID;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Players;
 
@@ -114,6 +115,21 @@ namespace SpectesGaze.Content.Systems
 						: "重启 就绪";
 
 				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready ? new Color(200, 160, 230) : new Color(140, 120, 120), 0.72f);
+				lineY += lineStep;
+			}
+
+			if (tier >= DomainRewind.RequiredTier)
+			{
+				bool supported = Main.netMode == NetmodeID.SinglePlayer;
+				bool rewinding = supported && ModContent.GetInstance<DomainRewind>().IsRewinding;
+				bool ready = supported && mp.DomainOn && mp.RewindCooldown <= 0;
+				string text = !supported ? "大范围重启 仅单人"
+					: rewinding ? "大范围重启 回溯中"
+					: !mp.DomainOn ? "大范围重启 需开域"
+					: mp.RewindCooldown > 0 ? $"大范围重启 冷却 {(mp.RewindCooldown + 59) / 60}s"
+					: "大范围重启 就绪";
+
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready || rewinding ? new Color(225, 135, 179) : new Color(140, 120, 120), 0.72f);
 			}
 		}
 
