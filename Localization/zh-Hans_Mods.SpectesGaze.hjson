@@ -45,6 +45,7 @@ Keybinds: {
 	FreezeDomain.DisplayName: 静止鬼域
 	RestartSelf.DisplayName: 重启自身
 	RewindDomain.DisplayName: 大范围重启
+	OverlapDomain.DisplayName: 鬼域叠加
 	ResetRevival.DisplayName: 清零复苏值（测试）
 }
 

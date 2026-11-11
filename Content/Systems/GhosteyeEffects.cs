@@ -63,6 +63,40 @@ namespace SpectesGaze.Content.Systems
 			Add(Shape.Rift, center, center, 30f, radius, Still, 46);
 		}
 
+		internal static void Overlap(Vector2 center, float radius)
+		{
+			Add(Shape.Rift, center, center, radius * 0.33f, radius * 0.92f, Crimson, 40);
+			Add(Shape.Rift, center, center, radius * 0.93f, radius * 0.54f, Blood, 32);
+			Burst(center, Blood, 18, 7f);
+		}
+
+		internal static void AwakenDomain(Vector2 center, float radius)
+		{
+			Add(Shape.Rift, center, center, radius * 0.22f, radius, Pale, 50);
+			Ring(center, 26f, 154f, Ember, 38);
+			Burst(center, Pale, 18, 5f);
+		}
+
+		internal static void EchoHit(Vector2 center, Vector2 size, bool awakened)
+		{
+			if (Main.dedServ || Effects.Count >= MaxEffects - 80) return;
+
+			float reach = Math.Clamp(Math.Max(size.X, size.Y) * 0.36f, 15f, 46f);
+			for (int i = 0; i < 3; i++)
+			{
+				Vector2 offset = new(i * 9f - 9f, i * 3f - 3f);
+				Vector2 slash = new(reach * (0.9f - i * 0.12f), reach * (0.45f + i * 0.16f));
+				Thread(center + offset - slash, center + offset + slash, awakened ? Pale : Blood, 11 + i * 3, 8f);
+			}
+		}
+
+		internal static void Rebirth(Vector2 center)
+		{
+			Ring(center, 135f, 18f, Pale, 22);
+			Ring(center, 24f, 152f, Ember, 40);
+			Burst(center, Pale, 18, 6f);
+		}
+
 		internal static void Restart(Vector2 center)
 		{
 			Ring(center, 146f, 12f, Violet, 26);

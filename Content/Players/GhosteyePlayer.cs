@@ -16,7 +16,7 @@ namespace SpectesGaze.Content.Players
 	/// 为什么不用饰品槽：改 Player.armor 数组要 patch 原版 UI 和存档，和别的 mod 冲突概率高。
 	/// 这里用"使用后固化"代替，状态存玩家数据里，UI 单独画一个格子显示。
 	/// </summary>
-	public class GhosteyePlayer : ModPlayer
+	public partial class GhosteyePlayer : ModPlayer
 	{
 		// ================= 装备状态 =================
 
@@ -124,13 +124,15 @@ namespace SpectesGaze.Content.Players
 			if (StillCooldown > 0) StillCooldown--;
 			if (RestartCooldown > 0) RestartCooldown--;
 			if (RewindCooldown > 0) RewindCooldown--;
+			int tier = CalculateTier();
+			UpdateEndgameState(tier);
 
 			// 鬼域开启期间：每帧续一次 buff 保持常驻，同时复苏值持续上涨。
 			if (DomainOn)
 			{
 				Player.AddBuff(ModContent.BuffType<GazeDomain>(), 2);
 
-				Revival = Math.Min(MaxRevival, Revival + RevivalDrainPerTick);
+				if (tier < AwakenedTier) Revival = Math.Min(MaxRevival, Revival + RevivalDrainPerTick);
 
 				// 复苏值溢满，鬼眼被迫闭合，进入锁定。
 				if (Revival >= MaxRevival)
@@ -141,7 +143,6 @@ namespace SpectesGaze.Content.Players
 
 			// 检测升层：每提升一层，把上一级积累的复苏值清零。
 			// lastTier > 0 的检查是为了避免新存档第一次更新时误报。
-			int tier = CalculateTier();
 			if (lastTier > 0 && tier > lastTier)
 			{
 				Revival = 0f;
@@ -187,7 +188,7 @@ namespace SpectesGaze.Content.Players
 			Player.statDefense += tier;
 
 			// 复苏值带来的输出加成。
-			Player.GetDamage(DamageClass.Generic) += RevivalDamageBonus;
+			if (tier < AwakenedTier) Player.GetDamage(DamageClass.Generic) += RevivalDamageBonus;
 
 			// 第三层起获得"看见灵异"：透视敌人，等同于猎人药水。
 			if (tier >= 3)
@@ -202,7 +203,7 @@ namespace SpectesGaze.Content.Players
 		/// </summary>
 		public override void ModifyHurt(ref Player.HurtModifiers modifiers)
 		{
-			if (!Equipped) return;
+			if (!Equipped || CalculateTier() >= AwakenedTier) return;
 			modifiers.FinalDamage *= 1f + RevivalHurtBonus;
 		}
 
@@ -296,6 +297,11 @@ namespace SpectesGaze.Content.Players
 				TryRewindDomain();
 			}
 
+			if (SpectesGaze.OverlapKey?.JustPressed == true && DomainOn && CalculateTier() >= OverlapTier)
+			{
+				TryOverlapDomain();
+			}
+
 			// 测试用：清零复苏值。正式发布前删掉这段。
 			if (SpectesGaze.ResetKey != null && SpectesGaze.ResetKey.JustPressed)
 			{
@@ -305,8 +311,6 @@ namespace SpectesGaze.Content.Players
 
 		/// <summary>
 		/// 技能消耗随层数递减。技能每被超越一层，消耗降 15%，最低保留 20%。
-		/// 这是设计文档里"层数越高，之前等级的技能消耗越少"的实现，
-		/// 也是第八层往上唯一还在增长的东西。
 		/// </summary>
 		private float SkillCost(float baseCost, int skillTier)
 		{
@@ -327,7 +331,7 @@ namespace SpectesGaze.Content.Players
 		/// </summary>
 		private void TryActivateStill()
 		{
-			if (StillCooldown > 0)
+			if (TierCooldown(StillCooldown) > 0)
 			{
 				Main.NewText($"静止还在冷却，{StillCooldown / 60 + 1} 秒。", 160, 60, 60);
 				return;
@@ -348,8 +352,8 @@ namespace SpectesGaze.Content.Players
 				count++;
 			}
 
-			StillCooldown = 60 * 30;
-			Revival = Math.Min(MaxRevival, Revival + SkillCost(12f, 6));
+			StillCooldown = TierCooldown(60 * 30);
+			GainRevival(SkillCost(12f, 6));
 			GhosteyeEffects.Freeze(Player.Center, radius);
 
 			if (count > 0)
@@ -365,7 +369,7 @@ namespace SpectesGaze.Content.Players
 		/// </summary>
 		private void TryRestartSelf()
 		{
-			if (RestartCooldown > 0)
+			if (TierCooldown(RestartCooldown) > 0)
 			{
 				Main.NewText($"重启还在冷却，{RestartCooldown / 60 + 1} 秒。", 160, 60, 60);
 				return;
@@ -374,7 +378,18 @@ namespace SpectesGaze.Content.Players
 			int healed = Player.statLifeMax2 - Player.statLife;
 			Player.statLife = Player.statLifeMax2;
 			if (healed > 0) Player.HealEffect(healed, true);
+			ClearDebuffs();
 
+			// 第八层起，自身重启冷却为 10 秒。十层免冷却。
+			RestartCooldown = TierCooldown(60 * (CalculateTier() >= 8 ? 10 : 30));
+			GainRevival(SkillCost(18f, 7));
+
+			SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.9f, Pitch = -0.5f }, Player.Center);
+			GhosteyeEffects.Restart(Player.Center);
+		}
+
+		private void ClearDebuffs()
+		{
 			// 清掉所有负面效果。DelBuff 会打乱数组，所以下标要回退一位。
 			for (int i = 0; i < Player.MaxBuffs; i++)
 			{
@@ -386,12 +401,6 @@ namespace SpectesGaze.Content.Players
 				i--;
 			}
 
-			// 第八层起，重启自身的冷却从 30 秒降到 10 秒。
-			RestartCooldown = 60 * (CalculateTier() >= 8 ? 10 : 30);
-			Revival = Math.Min(MaxRevival, Revival + SkillCost(18f, 7));
-
-			SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.9f, Pitch = -0.5f }, Player.Center);
-			GhosteyeEffects.Restart(Player.Center);
 		}
 
 		private void TryRewindDomain()
@@ -401,21 +410,23 @@ namespace SpectesGaze.Content.Players
 				Main.NewText("大范围重启目前仅在单人模式可用。", 190, 130, 145);
 				return;
 			}
-			if (RewindCooldown > 0)
+			if (TierCooldown(RewindCooldown) > 0)
 			{
 				Main.NewText($"大范围重启还在冷却，{(RewindCooldown + 59) / 60} 秒。", 160, 60, 60);
 				return;
 			}
 
 			float radius = DomainRadiusOf(CalculateTier());
-			if (!ModContent.GetInstance<DomainRewind>().TryStartRewind(Player.Center, radius))
+			DomainRewind rewind = ModContent.GetInstance<DomainRewind>();
+			if (rewind.IsRewinding) return;
+			if (!rewind.TryStartRewind(Player.Center, radius))
 			{
 				Main.NewText("鬼域内没有可回退的敌人。", 190, 130, 145);
 				return;
 			}
 
-			RewindCooldown = 60 * 30;
-			Revival = Math.Min(MaxRevival, Revival + SkillCost(25f, DomainRewind.RequiredTier));
+			RewindCooldown = TierCooldown(60 * 30);
+			GainRevival(SkillCost(25f, DomainRewind.RequiredTier));
 			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.75f, Pitch = -0.7f }, Player.Center);
 		}
 
@@ -463,13 +474,24 @@ namespace SpectesGaze.Content.Players
 		/// </summary>
 		private void TryFireBeam()
 		{
-			if (BeamCooldown > 0)
+			if (TierCooldown(BeamCooldown) > 0)
 			{
 				Main.NewText($"激光还在冷却，{BeamCooldown / 60 + 1} 秒。", 160, 60, 60);
 				return;
 			}
 
 			int tier = CalculateTier();
+			int beamType = ModContent.ProjectileType<Projectiles.GhostBeam>();
+			// 十层可立即重放，同一只鬼眼仍只维持一条光束。
+			if (tier >= AwakenedTier)
+			{
+				for (int i = 0; i < Main.maxProjectiles; i++)
+				{
+					Projectile beam = Main.projectile[i];
+					if (beam.active && beam.type == beamType && beam.owner == Player.whoAmI) beam.Kill();
+				}
+			}
+
 			Vector2 origin = FloatingEyeCenter;
 			Vector2 dir = (Main.MouseWorld - origin).SafeNormalize(Vector2.UnitX);
 			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(120f + tier * 20f);
@@ -478,20 +500,20 @@ namespace SpectesGaze.Content.Players
 				Player.GetSource_FromThis(),
 				origin,
 				dir,
-				ModContent.ProjectileType<Projectiles.GhostBeam>(),
+				beamType,
 				damage,
 				0f,
 				Player.whoAmI);
 
-			BeamCooldown = 60 * (tier >= 6 ? 10 : 20);
-			Revival = Math.Min(MaxRevival, Revival + SkillCost(8f, 5));
+			BeamCooldown = TierCooldown(60 * (tier >= 6 ? 10 : 20));
+			GainRevival(SkillCost(8f, 5));
 
 			SoundEngine.PlaySound(SoundID.Item72 with { Volume = 0.9f, Pitch = -0.2f }, origin);
 		}
 
 		private void TryOpenDomain()
 		{
-			if (DomainCooldown > 0)
+			if (TierCooldown(DomainCooldown) > 0)
 			{
 				Main.NewText($"鬼眼还在闭合状态，{DomainCooldown / 60 + 1} 秒后才能睁开。", 160, 60, 60);
 				return;
@@ -505,12 +527,13 @@ namespace SpectesGaze.Content.Players
 			}
 
 			DomainOn = true;
-			Revival = Math.Min(MaxRevival, Revival + SkillCost(10f, 1));
+			GainRevival(SkillCost(10f, 1));
 
 			// 开启瞬间：范围内所有敌人挂上凝视。
 			int tier = CalculateTier();
 			float radius = DomainRadiusOf(tier);
-			GhosteyeEffects.Open(Player.Center, radius);
+			if (tier >= AwakenedTier) GhosteyeEffects.AwakenDomain(Player.Center, radius);
+			else GhosteyeEffects.Open(Player.Center, radius);
 
 			for (int i = 0; i < Main.maxNPCs; i++)
 			{
@@ -528,6 +551,7 @@ namespace SpectesGaze.Content.Players
 		private void CloseDomain(bool overflowed)
 		{
 			DomainOn = false;
+			OverlapTime = 0;
 			GhosteyeEffects.Close(Player.Center, DomainRadiusOf(CalculateTier()), overflowed);
 
 			if (overflowed)
@@ -569,7 +593,7 @@ namespace SpectesGaze.Content.Players
 			Vector2 from = Player.Center;
 			Player.Teleport(checkPos, 1);
 			Player.velocity = Vector2.Zero;
-			Revival = Math.Min(MaxRevival, Revival + 3f);
+			GainRevival(3f);
 			GhosteyeEffects.Teleport(from, Player.Center);
 		}
 

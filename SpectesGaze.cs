@@ -20,6 +20,9 @@ namespace SpectesGaze
 		// 大范围重启。第八层起可用。
 		public static ModKeybind RewindKey { get; private set; }
 
+		// 鬼域叠加。第九层起可用。
+		public static ModKeybind OverlapKey { get; private set; }
+
 		// 测试用：一键把复苏值清零。正式发布前删掉。
 		public static ModKeybind ResetKey { get; private set; }
 
@@ -30,6 +33,7 @@ namespace SpectesGaze
 			StillKey = KeybindLoader.RegisterKeybind(this, "FreezeDomain", "None");
 			RestartKey = KeybindLoader.RegisterKeybind(this, "RestartSelf", "None");
 			RewindKey = KeybindLoader.RegisterKeybind(this, "RewindDomain", "None");
+			OverlapKey = KeybindLoader.RegisterKeybind(this, "OverlapDomain", "None");
 			ResetKey = KeybindLoader.RegisterKeybind(this, "ResetRevival", "F10");
 		}
 
@@ -41,6 +45,7 @@ namespace SpectesGaze
 			StillKey = null;
 			RestartKey = null;
 			RewindKey = null;
+			OverlapKey = null;
 			ResetKey = null;
 		}
 	}

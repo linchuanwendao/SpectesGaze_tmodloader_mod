@@ -71,7 +71,17 @@ namespace SpectesGaze.Content.Systems
 			try
 			{
 				float time = Main.GlobalTimeWrappedHourly;
-				if (hasDomain) DrawDomain(player, time, view);
+				float overlap = 0f;
+				if (hasDomain)
+				{
+					int overlapTime = player.GetModPlayer<GhosteyePlayer>().OverlapTime;
+					if (overlapTime > 0)
+					{
+						float edge = Math.Min((GhosteyePlayer.OverlapDuration - overlapTime + 1) / 12f, overlapTime / 24f);
+						overlap = MathHelper.SmoothStep(0f, 1f, edge);
+					}
+					DrawDomain(player, time, view, overlap);
+				}
 				GhosteyeEffects.Draw(time, view);
 				ModContent.GetInstance<DomainRewind>().DrawPlayback(time, view);
 				DrawNpcEffects(time, view);
@@ -96,7 +106,7 @@ namespace SpectesGaze.Content.Systems
 					if (tier >= 3)
 					{
 						Vector2 eyePos = firingEye ?? player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
-						DrawEye(eyePos, tier, time, firingEye.HasValue ? 1f : DomainFade);
+						DrawEye(eyePos, tier, time, firingEye.HasValue ? 1f : DomainFade, overlap);
 					}
 				}
 			}
@@ -106,7 +116,7 @@ namespace SpectesGaze.Content.Systems
 			}
 		}
 
-		private void DrawDomain(Player player, float time, Rectangle view)
+		private void DrawDomain(Player player, float time, Rectangle view, float overlap)
 		{
 			int tier = GhosteyePlayer.CalculateTier();
 			float radius = GhosteyePlayer.DomainRadiusOf(tier);
@@ -114,8 +124,9 @@ namespace SpectesGaze.Content.Systems
 			float fade = DomainFade;
 			float pulse = DomainPulse(time);
 			Color red = DomainColor(tier);
+			bool awakened = tier >= GhosteyePlayer.AwakenedTier;
 
-			DrawGlow(center, new Vector2(radius * 2.15f), Shadow * (0.36f * fade));
+			DrawGlow(center, new Vector2(radius * 2.15f), Shadow * ((awakened ? 0.55f : 0.36f) * fade));
 			for (int i = 0; i < 9; i++)
 			{
 				float phase = i * 2.39996f;
@@ -126,7 +137,17 @@ namespace SpectesGaze.Content.Systems
 					new Color(64, 7, 26) * (fade * (0.17f + 0.18f * drift)), angle + 0.7f);
 			}
 
-			DrawTornEdge(center, radius, time, red, fade, view);
+			DrawTornEdge(center, radius, time, awakened ? Pale : red, fade, view);
+			if (tier >= GhosteyePlayer.OverlapTier)
+			{
+				Vector2 echo = new(MathF.Sin(time * 1.1f) * 16f, MathF.Cos(time * 0.83f) * 11f);
+				DrawTornEdge(center + echo, radius * (0.91f - overlap * 0.1f), -time * 0.72f,
+					Blood, fade * (0.44f + overlap * 0.46f), view);
+				if (overlap > 0f)
+				{
+					DrawTornEdge(center - echo, radius * 0.62f, time * 0.67f, red, fade * overlap * 0.68f, view);
+				}
+			}
 
 			int motes = 14 + 2 * tier;
 			for (int i = 0; i < motes; i++)
@@ -138,7 +159,7 @@ namespace SpectesGaze.Content.Systems
 				Vector2 point = center + drift.ToRotationVector2() * radius * (0.16f + 0.73f * depth)
 					+ Vector2.UnitY * (fall * 26f);
 				DrawGlow(point, new Vector2(3f + 4f * depth, 6f + 11f * fall),
-					Light(red, fade * fall * 0.45f), MathF.Sin(phase) * 0.4f);
+					Light(awakened && i % 3 == 0 ? Pale : red, fade * fall * 0.45f), MathF.Sin(phase) * 0.4f);
 			}
 
 			Texture2D core = ModContent.Request<Texture2D>(EffectPath + "DomainCore").Value;
@@ -147,12 +168,26 @@ namespace SpectesGaze.Content.Systems
 				Color.White * (0.21f * fade), 0f);
 		}
 
-		private static void DrawEye(Vector2 eyePos, int tier, float time, float fade)
+		private static void DrawEye(Vector2 eyePos, int tier, float time, float fade, float overlap)
 		{
 			Texture2D eye = ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
 			Color red = DomainColor(tier);
 			float eyeSize = 44f + tier * 3f + DomainPulse(time) * 3f;
+			if (overlap > 0f)
+			{
+				// 八个浮动的残影围住真正的鬼眼。
+				for (int i = 0; i < 8; i++)
+				{
+					float angle = i * MathHelper.TwoPi / 8f + MathF.Sin(time * 1.4f + i) * 0.16f;
+					Vector2 offset = angle.ToRotationVector2() * new Vector2(89f, 55f) * (0.6f + overlap * 0.4f);
+					float opacity = fade * overlap * (0.24f + 0.31f * Wave(time * 4f + i * 1.8f));
+					Stamp(eye, eyePos + offset, new Vector2(eyeSize * 0.45f, eyeSize * 0.36f),
+						new Color(239, 104, 133) * opacity, MathF.Sin(angle) * 0.35f);
+				}
+			}
 			DrawGlow(eyePos, new Vector2(eyeSize * 2.5f, eyeSize * 2f), Shadow * (0.74f * fade));
+			if (tier >= GhosteyePlayer.AwakenedTier)
+				DrawGlow(eyePos, new Vector2(eyeSize * 2.05f, eyeSize * 1.25f), Light(Pale, fade * 0.37f));
 			DrawGlow(eyePos, new Vector2(eyeSize * 1.6f, eyeSize * 1.3f), Light(red, fade * 0.4f));
 			for (int i = -2; i <= 2; i++)
 			{

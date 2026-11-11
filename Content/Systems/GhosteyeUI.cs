@@ -48,14 +48,15 @@ namespace SpectesGaze.Content.Systems
 			Rectangle barBack = new Rectangle(barX, barY, barW, barH);
 			spriteBatch.Draw(pixel, barBack, new Color(38, 8, 12) * 0.88f);
 
-			float ratio = mp.Revival / GhosteyePlayer.MaxRevival;
+			bool mastered = tier >= GhosteyePlayer.AwakenedTier;
+			float ratio = mastered ? 0f : mp.Revival / GhosteyePlayer.MaxRevival;
 			Rectangle barFill = new Rectangle(barX, barY, (int)(barW * ratio), barH);
 			spriteBatch.Draw(pixel, barFill, new Color(214, 40, 52));
 
 			DrawBorder(spriteBatch, pixel, barBack, new Color(120, 30, 40) * 0.9f);
 
 			// 数值
-			string label = $"复苏 {(int)mp.Revival}";
+			string label = mastered ? "复苏已平息" : $"复苏 {(int)mp.Revival}";
 			Utils.DrawBorderString(spriteBatch, label, new Vector2(barX + barW + 8, barY - 2), Color.White, 0.75f);
 
 			// 层数
@@ -68,7 +69,8 @@ namespace SpectesGaze.Content.Systems
 			// 鬼域
 			if (mp.DomainOn)
 			{
-				Utils.DrawBorderString(spriteBatch, "鬼域 开启中", new Vector2(barX, lineY), new Color(230, 90, 90), 0.75f);
+				Utils.DrawBorderString(spriteBatch, mastered ? "鬼域 完全复苏" : "鬼域 开启中",
+					new Vector2(barX, lineY), mastered ? new Color(255, 219, 207) : new Color(230, 90, 90), 0.75f);
 			}
 			else if (mp.DomainCooldown > 0)
 			{
@@ -130,6 +132,21 @@ namespace SpectesGaze.Content.Systems
 					: "大范围重启 就绪";
 
 				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready || rewinding ? new Color(225, 135, 179) : new Color(140, 120, 120), 0.72f);
+				lineY += lineStep;
+			}
+
+			if (tier >= GhosteyePlayer.OverlapTier)
+			{
+				bool active = mp.DomainOn && mp.OverlapTime > 0;
+				bool ready = mp.DomainOn && mp.OverlapCooldown == 0;
+				string text = active
+					? $"鬼域叠加 {(mp.OverlapTime + 59) / 60}s"
+					: !mp.DomainOn ? "鬼域叠加 需开域"
+					: mp.OverlapCooldown > 0 ? $"鬼域叠加 冷却 {(mp.OverlapCooldown + 59) / 60}s"
+					: "鬼域叠加 就绪";
+
+				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY),
+					active || ready ? new Color(250, 118, 149) : new Color(140, 120, 120), 0.72f);
 			}
 		}
 

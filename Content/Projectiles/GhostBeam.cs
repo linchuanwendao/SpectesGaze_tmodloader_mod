@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Terraria;
+using Terraria.ID;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Players;
 using SpectesGaze.Content.Systems;
@@ -64,7 +65,8 @@ namespace SpectesGaze.Content.Projectiles
 				return;
 			}
 
-			Vector2 start = player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
+			GhosteyePlayer eye = player.GetModPlayer<GhosteyePlayer>();
+			Vector2 start = eye.FloatingEyeCenter;
 
 			// 只有发射者决定方向，其他人跟随同步过来的 velocity。
 			if (Projectile.owner == Main.myPlayer)
@@ -84,11 +86,11 @@ namespace SpectesGaze.Content.Projectiles
 					Lighting.AddLight(start + aim * (MaxLength * i / 12f), 0.43f, 0.045f, 0.095f);
 			}
 
-			DealBeamDamage(start, aim);
+			DealBeamDamage(eye, start, aim);
 		}
 
 		/// <summary>线段与敌人矩形求交，命中就结算伤害。8 帧无敌间隔防止每帧重复打。</summary>
-		private void DealBeamDamage(Vector2 start, Vector2 aim)
+		private void DealBeamDamage(GhosteyePlayer eye, Vector2 start, Vector2 aim)
 		{
 			Vector2 end = start + aim * MaxLength;
 
@@ -100,9 +102,12 @@ namespace SpectesGaze.Content.Projectiles
 				if (!Collision.CheckAABBvLineCollision(npc.position, npc.Size, start, end)) continue;
 
 				int dir = aim.X > 0f ? 1 : -1;
-				npc.SimpleStrikeNPC(Projectile.damage, dir);
+				NPC.HitInfo hit = npc.CalculateHitInfo(Projectile.damage, dir);
+				int damageDone = npc.StrikeNPC(hit);
+				if (Main.netMode != NetmodeID.SinglePlayer) NetMessage.SendStrikeNPC(npc, hit);
 				npc.immune[Projectile.owner] = 8;
 
+				eye.ApplyEchoHits(npc, hit, damageDone);
 				GhosteyeEffects.Impact(npc.Center, beam: true);
 			}
 		}
