@@ -83,6 +83,7 @@ namespace SpectesGaze.Content.Systems
 					DrawDomain(player, time, view, overlap);
 				}
 				GhosteyeEffects.Draw(time, view);
+				ModContent.GetInstance<DomainGrab>().Draw(time);
 				ModContent.GetInstance<DomainRewind>().DrawPlayback(time, view);
 				DrawNpcEffects(time, view);
 

@@ -46,6 +46,7 @@ Keybinds: {
 	RestartSelf.DisplayName: 重启自身
 	RewindDomain.DisplayName: 大范围重启
 	OverlapDomain.DisplayName: 鬼域叠加
+	GrabInDomain.DisplayName: 鬼域抓取
 	ResetRevival.DisplayName: 清零复苏值（测试）
 }
 

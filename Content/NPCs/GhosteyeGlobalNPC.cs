@@ -1,8 +1,10 @@
 using Microsoft.Xna.Framework;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Buffs;
 using SpectesGaze.Content.Players;
+using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.NPCs
 {
@@ -70,11 +72,22 @@ namespace SpectesGaze.Content.NPCs
 			return false;
 		}
 
-		internal void MoveToPastPosition(NPC npc, Vector2 position)
+		internal void MoveToPosition(NPC npc, Vector2 position)
 		{
 			npc.position = position;
 			npc.oldPosition = position;
 			if (frozenPosition.HasValue) frozenPosition = position;
+		}
+
+		public override void OnSpawn(NPC npc, IEntitySource source) =>
+			ModContent.GetInstance<DomainGrab>().ReleaseIfHolding(npc);
+
+		public override bool PreAI(NPC npc)
+		{
+			if (!ModContent.GetInstance<DomainGrab>().Holds(npc)) return true;
+
+			npc.velocity = Vector2.Zero;
+			return false;
 		}
 
 		public override void PostAI(NPC npc)

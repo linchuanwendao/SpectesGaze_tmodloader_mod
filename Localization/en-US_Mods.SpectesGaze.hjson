@@ -46,6 +46,7 @@ Keybinds: {
 	RestartSelf.DisplayName: Restart Self
 	RewindDomain.DisplayName: Rewind Domain
 	OverlapDomain.DisplayName: Overlap Domain
+	GrabInDomain.DisplayName: Grab in Domain
 	ResetRevival.DisplayName: Clear Revival (Test)
 }
 

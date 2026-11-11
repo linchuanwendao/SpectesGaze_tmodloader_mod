@@ -302,6 +302,8 @@ namespace SpectesGaze.Content.Players
 				TryOverlapDomain();
 			}
 
+			ModContent.GetInstance<DomainGrab>().HandleInput(Player, DomainOn);
+
 			// 测试用：清零复苏值。正式发布前删掉这段。
 			if (SpectesGaze.ResetKey != null && SpectesGaze.ResetKey.JustPressed)
 			{

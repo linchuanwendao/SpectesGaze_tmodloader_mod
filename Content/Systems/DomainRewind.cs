@@ -134,7 +134,7 @@ namespace SpectesGaze.Content.Systems
 			{
 				RewindTarget target = targets[i];
 				if (!interruptedGroups[target.Group])
-					target.History.MoveToPastPosition(target.Npc, positions[i]);
+					target.History.MoveToPosition(target.Npc, positions[i]);
 			}
 
 			if (playbackAge >= PlaybackTicks) targets.Clear();
