@@ -57,13 +57,26 @@ namespace SpectesGaze.Content.Players
 		public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone) =>
 			ApplyEchoHits(target, hit, damageDone);
 
+		internal int AttackHitCount(int tier)
+		{
+			int hits = tier >= AwakenedTier ? 10 : 1;
+			if (tier >= OverlapTier && OverlapTime > 0) hits += 8;
+			return hits;
+		}
+
+		internal void RecordDps(NPC target, int damage)
+		{
+			if (damage > 0 && Player.whoAmI == Main.myPlayer && Player.accDreamCatcher && !target.HideStrikeDamage)
+				Player.addDPS(damage);
+		}
+
 		internal void ApplyEchoHits(NPC target, NPC.HitInfo hit, int damageDone)
 		{
 			if (applyingEchoHits || !Equipped || !DomainOn || Player.dead || Player.whoAmI != Main.myPlayer
-				|| damageDone <= 0 || hit.InstantKill || target.friendly) return;
+				|| damageDone <= 0 || hit.InstantKill || (target.friendly && target.type != NPCID.TargetDummy)) return;
 
 			int tier = CalculateTier();
-			int extraHits = tier >= AwakenedTier ? 9 : tier >= OverlapTier && OverlapTime > 0 ? 8 : 0;
+			int extraHits = AttackHitCount(tier) - 1;
 			if (extraHits == 0) return;
 
 			// 回响沿用已经结算过的伤害，不重新扣防御，也不重复触发武器特效。
@@ -77,12 +90,14 @@ namespace SpectesGaze.Content.Players
 				for (int i = 0; i < extraHits; i++)
 				{
 					if (!target.active || target.life <= 0 || target.type != targetType
-						|| target.dontTakeDamage || target.immortal) break;
+						|| target.dontTakeDamage) break;
 
+					// 稻草人可以正常受击，StrikeNPC 会保留它的 immortal 状态。
 					int damage = target.StrikeNPC(hit);
 					if (damage <= 0) break;
 
 					if (Main.netMode == NetmodeID.MultiplayerClient) NetMessage.SendStrikeNPC(target, hit);
+					RecordDps(target, damage);
 					landed++;
 				}
 			}

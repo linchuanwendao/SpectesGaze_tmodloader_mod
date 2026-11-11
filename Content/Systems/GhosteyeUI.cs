@@ -140,7 +140,7 @@ namespace SpectesGaze.Content.Systems
 				bool active = mp.DomainOn && mp.OverlapTime > 0;
 				bool ready = mp.DomainOn && mp.OverlapCooldown == 0;
 				string text = active
-					? $"鬼域叠加 {(mp.OverlapTime + 59) / 60}s"
+					? $"鬼域叠加 ×{mp.AttackHitCount(tier)} {(mp.OverlapTime + 59) / 60}s"
 					: !mp.DomainOn ? "鬼域叠加 需开域"
 					: mp.OverlapCooldown > 0 ? $"鬼域叠加 冷却 {(mp.OverlapCooldown + 59) / 60}s"
 					: "鬼域叠加 就绪";

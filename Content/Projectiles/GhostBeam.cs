@@ -97,7 +97,8 @@ namespace SpectesGaze.Content.Projectiles
 			for (int i = 0; i < Main.maxNPCs; i++)
 			{
 				NPC npc = Main.npc[i];
-				if (!npc.active || npc.friendly || npc.immortal || npc.dontTakeDamage) continue;
+				if (!npc.active || npc.dontTakeDamage) continue;
+				if ((npc.friendly || npc.immortal) && npc.type != NPCID.TargetDummy) continue;
 				if (npc.immune[Projectile.owner] > 0) continue;
 				if (!Collision.CheckAABBvLineCollision(npc.position, npc.Size, start, end)) continue;
 
@@ -107,6 +108,7 @@ namespace SpectesGaze.Content.Projectiles
 				if (Main.netMode != NetmodeID.SinglePlayer) NetMessage.SendStrikeNPC(npc, hit);
 				npc.immune[Projectile.owner] = 8;
 
+				eye.RecordDps(npc, damageDone);
 				eye.ApplyEchoHits(npc, hit, damageDone);
 				GhosteyeEffects.Impact(npc.Center, beam: true);
 			}
