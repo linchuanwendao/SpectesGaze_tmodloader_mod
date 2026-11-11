@@ -171,7 +171,8 @@ namespace SpectesGaze.Content.Players
 			}
 
 			// 右键瞬移。只在本地玩家身上处理。
-			if (DomainOn && Player.whoAmI == Main.myPlayer && Main.mouseRight && Main.mouseRightRelease)
+			if (DomainOn && Player.whoAmI == Main.myPlayer && Main.mouseRight && Main.mouseRightRelease
+				&& !Player.mouseInterface && !ModContent.GetInstance<GhosteyeUI>().GuideOpen)
 			{
 				TryTeleport();
 			}
@@ -250,6 +251,14 @@ namespace SpectesGaze.Content.Players
 		{
 			if (Player.whoAmI != Main.myPlayer) return;
 			if (!Equipped) return;
+
+			GhosteyeUI ui = ModContent.GetInstance<GhosteyeUI>();
+			if (SpectesGaze.GuideKey?.JustPressed == true)
+			{
+				ui.ToggleGuide();
+				return;
+			}
+			if (ui.GuideOpen) return;
 
 			// 一个键既是开也是关。
 			if (SpectesGaze.GazeKey != null && SpectesGaze.GazeKey.JustPressed)

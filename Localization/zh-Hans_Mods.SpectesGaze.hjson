@@ -47,7 +47,158 @@ Keybinds: {
 	RewindDomain.DisplayName: 大范围重启
 	OverlapDomain.DisplayName: 鬼域叠加
 	GrabInDomain.DisplayName: 鬼域抓取
+	GhosteyeGuide.DisplayName: 鬼眼技能说明
 	ResetRevival.DisplayName: 清零复苏值（测试）
+}
+
+GhosteyeUI: {
+	Title: 鬼眼 · 技能说明
+	OpenGuide: 技能说明
+	Tier: 第 {0} 层
+	Revival: 复苏 {0}
+	RevivalEnded: 复苏已平息
+	DomainOpen: 鬼域展开
+	DomainClosed: 鬼域关闭
+	DomainAwakened: 完全复苏
+	DomainLock: 闭合 {0}s
+	OpenDomainWith: 展开鬼域 [{0}]
+	DomainDiameter: 直径 {0} 格
+	Ready: 就绪
+	Cooling: 冷却 {0}s
+	Unbound: 未绑定
+	Solo: 仅单人
+	Rewinding: 回溯中
+	NeedsDomain: 需开启鬼域
+	BeamShort: 激光
+	StillShort: 静止
+	RestartShort: 重启
+	RewindShort: 回溯
+	OverlapShort: 叠加
+	SkillList: 技能目录
+	SelectSkill: 点击左侧查看技能
+	ToggleWith: 开关面板 [{0}]
+	Unlocked: 已解锁
+	Locked: 未解锁
+	Control: 操作
+	Effect: 效果
+	Requirement: 解锁层数
+	CurrentState: 当前状态
+	RightClick: 鼠标右键
+	Automatic: 自动生效
+
+	Skills: {
+		Domain: {
+			Name: 展开鬼域
+			Effect:
+				'''
+				开域时，对范围内敌人施加 5 秒凝视。
+				开域后移速 +20%、伤害 +15%、暴击 +8 个百分点，免疫击退。
+				武器或弹幕命中有 5% 概率让敌人减速 3 秒。
+				复苏值每秒增加 1.5 点。达到 100 时鬼眼闭合 30 秒。
+				复苏值越高，造成和受到的伤害越高。
+				'''
+		}
+		Teleport: {
+			Name: 域内瞬移
+			Effect:
+				'''
+				开域后右键点击，将自己传送到鼠标指向的位置。
+				落点须在鬼域内，路线和落点都要避开实体方块。
+				成功传送增加 3 点复苏值。十层免消耗。
+				'''
+		}
+		Grab: {
+			Name: 鬼域抓取
+			Effect:
+				'''
+				单人开域后，按住绑定键拖动指针附近的目标，松开即放下。
+				一层可抓掉落物和小动物，四层可抓普通敌人。
+				八层可抓城镇居民。Boss 和已识别的部件无法抓取。
+				实体方块会阻挡拖动，目标会停在鬼域边界内。
+				'''
+		}
+		Sight: {
+			Name: 看见灵异
+			Effect:
+				'''
+				融合鬼眼并达到三层后，可透过地形看见生物轮廓。
+				开域时，悬浮鬼眼会在角色头顶显形。
+				'''
+		}
+		Flame: {
+			Name: 鬼火灼烧
+			Effect:
+				'''
+				武器或弹幕命中敌人时，使其燃烧 5 秒。
+				四层每秒造成 30 伤害，五至六层每秒 60。
+				七层起每秒造成 150 伤害。
+				'''
+		}
+		Bolt: {
+			Name: 鬼眼光弹
+			Effect:
+				'''
+				开域后，悬浮鬼眼每隔 0.75 秒搜索范围内最近的敌人。
+				发现目标时发出一枚会轻微追踪的光弹。
+				光弹免复苏值消耗。
+				'''
+		}
+		Beam: {
+			Name: 鬼眼激光
+			Effect:
+				'''
+				开域后，悬浮鬼眼朝鼠标持续发射光束 1.5 秒。
+				冷却 20 秒，六层起缩短为 10 秒。
+				基础消耗为 8 点复苏值，超过五层后递减。
+				'''
+		}
+		Still: {
+			Name: 静止鬼域
+			Effect:
+				'''
+				开域后，锁住范围内敌人的位置。
+				普通敌人静止 5 秒，Boss 静止 2 秒。
+				冷却 30 秒，基础消耗为 12 点复苏值。
+				'''
+		}
+		Restart: {
+			Name: 重启自身
+			Effect:
+				'''
+				开域后，原地回满生命并清除负面效果。
+				冷却 30 秒，八层起缩短为 10 秒。
+				基础消耗为 18 点复苏值，超过七层后递减。
+				'''
+		}
+		Rewind: {
+			Name: 大范围重启
+			Effect:
+				'''
+				单人开域后，让范围内的敌人沿原路倒退。
+				演出持续 2 秒，终点为技能发动前 2 秒的位置。
+				冷却 30 秒，基础消耗为 25 点复苏值。
+				'''
+		}
+		Overlap: {
+			Name: 鬼域叠加
+			Effect:
+				'''
+				开域后启动叠加，持续 3 秒。
+				每次有效命中追加 8 次回响，九层合计 9 击。
+				十层叠加时合计 18 击。九层冷却 60 秒。
+				'''
+		}
+		Awaken: {
+			Name: 完全复苏
+			Effect:
+				'''
+				十层起，复苏值平息，鬼眼技能免消耗和冷却。
+				开域时免疫伤害，道具使用速度提升至 10 倍。
+				每次有效命中合计 10 击，开启叠加时合计 18 击。
+				遇到致死结算时，原地恢复生命和法力并清除负面效果。
+				'''
+		}
+	}
 }
 
 Projectiles: {

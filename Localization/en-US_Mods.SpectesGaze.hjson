@@ -47,7 +47,158 @@ Keybinds: {
 	RewindDomain.DisplayName: Rewind Domain
 	OverlapDomain.DisplayName: Overlap Domain
 	GrabInDomain.DisplayName: Grab in Domain
+	GhosteyeGuide.DisplayName: Ghosteye Skill Guide
 	ResetRevival.DisplayName: Clear Revival (Test)
+}
+
+GhosteyeUI: {
+	Title: Ghosteye Skill Guide
+	OpenGuide: Skill Guide
+	Tier: Tier {0}
+	Revival: Revival {0}
+	RevivalEnded: Revival Suppressed
+	DomainOpen: Domain Open
+	DomainClosed: Domain Closed
+	DomainAwakened: Fully Awakened
+	DomainLock: Locked for {0}s
+	OpenDomainWith: Open Domain [{0}]
+	DomainDiameter: "{0} tiles across"
+	Ready: Ready
+	Cooling: Cooldown {0}s
+	Unbound: Unbound
+	Solo: Solo Only
+	Rewinding: Rewinding
+	NeedsDomain: Requires an open domain
+	BeamShort: Beam
+	StillShort: Freeze
+	RestartShort: Restart
+	RewindShort: Rewind
+	OverlapShort: Overlap
+	SkillList: Skills
+	SelectSkill: Select a skill to read its effects
+	ToggleWith: Toggle guide [{0}]
+	Unlocked: Unlocked
+	Locked: Locked
+	Control: Control
+	Effect: Effect
+	Requirement: Unlock tier
+	CurrentState: Current state
+	RightClick: Right mouse button
+	Automatic: Automatic
+
+	Skills: {
+		Domain: {
+			Name: Open Domain
+			Effect:
+				'''
+				Opening inflicts Ghastly Gaze for 5 seconds on enemies in range.
+				Gain 20% movement speed, 15% damage, 8% crit and knockback immunity.
+				Weapon or projectile hits have a 5% chance to slow for 3 seconds.
+				Revival rises by 1.5 per second and closes the eye for 30s at 100.
+				Higher Revival increases damage dealt and taken.
+				'''
+		}
+		Teleport: {
+			Name: Domain Teleport
+			Effect:
+				'''
+				Right-click inside an open domain to teleport to the cursor.
+				The route and destination must clear solid tiles.
+				Successful teleports add 3 Revival. Tier 10 removes the cost.
+				'''
+		}
+		Grab: {
+			Name: Domain Grab
+			Effect:
+				'''
+				In solo play, hold the key to drag a target in an open domain.
+				Tier 1 allows drops and critters. Tier 4 adds ordinary enemies.
+				Tier 8 adds town NPCs. Bosses and recognized parts are excluded.
+				Release the key to drop the target. Solid tiles block dragging.
+				'''
+		}
+		Sight: {
+			Name: Spirit Sight
+			Effect:
+				'''
+				See creatures through terrain while bound to the Ghosteye.
+				The floating eye appears overhead when the domain opens.
+				'''
+		}
+		Flame: {
+			Name: Ghostflame
+			Effect:
+				'''
+				Weapon and projectile hits burn enemies for 5 seconds.
+				Damage per second is 30 at tier 4 and 60 at tiers 5 and 6.
+				Tier 7 and higher deal 150 damage per second.
+				'''
+		}
+		Bolt: {
+			Name: Ghosteye Bolt
+			Effect:
+				'''
+				The eye checks for the nearest enemy in range every 0.75 seconds.
+				While the domain is open, it fires a lightly homing bolt.
+				The bolt costs no Revival.
+				'''
+		}
+		Beam: {
+			Name: Ghosteye Beam
+			Effect:
+				'''
+				The eye fires a 1.5-second beam toward the cursor in an open domain.
+				Cooldown is 20 seconds, reduced to 10 from tier 6.
+				Base Revival cost is 8 and decreases above tier 5.
+				'''
+		}
+		Still: {
+			Name: Freeze Domain
+			Effect:
+				'''
+				Lock enemies in place within the open domain.
+				Ordinary enemies stop for 5 seconds and bosses for 2 seconds.
+				Cooldown is 30 seconds. Base Revival cost is 12.
+				'''
+		}
+		Restart: {
+			Name: Restart Self
+			Effect:
+				'''
+				Restore all life and clear debuffs in place in an open domain.
+				Cooldown is 30 seconds, reduced to 10 from tier 8.
+				Base Revival cost is 18 and decreases above tier 7.
+				'''
+		}
+		Rewind: {
+			Name: Rewind Domain
+			Effect:
+				'''
+				In solo play, enemies in the open domain retrace their paths.
+				Playback lasts 2 seconds and ends where they were 2 seconds before cast.
+				Cooldown is 30 seconds. Base Revival cost is 25.
+				'''
+		}
+		Overlap: {
+			Name: Domain Overlap
+			Effect:
+				'''
+				Overlap an open domain for 3 seconds.
+				Each successful hit adds 8 echoes, for 9 total hits at tier 9.
+				Tier 10 reaches 18 hits. Tier 9 has a 60-second cooldown.
+				'''
+		}
+		Awaken: {
+			Name: Fully Awakened
+			Effect:
+				'''
+				Tier 10 removes Revival costs and Ghosteye skill cooldowns.
+				An open domain grants damage immunity and 10x item use speed.
+				Hits count tenfold, or eighteenfold during Domain Overlap.
+				A lethal strike restores life and mana and removes debuffs in place.
+				'''
+		}
+	}
 }
 
 Projectiles: {

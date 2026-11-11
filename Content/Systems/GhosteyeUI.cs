@@ -1,162 +1,225 @@
+using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
-using Terraria.GameContent;
+using Terraria.GameInput;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
+using Terraria.UI;
 using SpectesGaze.Content.Players;
 
 namespace SpectesGaze.Content.Systems
 {
-	/// <summary>
-	/// 复苏值条 + 鬼眼装备格。
-	/// 这两样都不属于物品栏，是屏幕 HUD，所以画在 PostDrawInterface 里。
-	/// </summary>
-	public class GhosteyeUI : ModSystem
+	public partial class GhosteyeUI : ModSystem
 	{
-		// HUD 定位。左上角是原版 UI 的空白区，不会和血条、buff 打架。
-		private static readonly Vector2 Anchor = new Vector2(24f, 90f);
+		private const int HudWidth = 440;
+		private const int HudHeight = 73;
+		private const int GuideWidth = 776;
+		private const int GuideHeight = 484;
+		private static readonly Rectangle GuideButton = new(336, 12, 90, 26);
+		private static readonly Rectangle CloseButton = new(728, 16, 32, 28);
+		private UserInterface ui;
+		private GhosteyeState state;
+		private bool guideOpen;
+		private int selectedSkill;
 
-		public override void PostDrawInterface(SpriteBatch spriteBatch)
+		internal bool GuideOpen => guideOpen && CanShow;
+
+		private static bool CanShow => !Main.dedServ && !Main.gameMenu && !Main.hideUI
+			&& !Main.playerInventory && !Main.ingameOptionsWindow && !Main.inFancyUI && !Main.mapFullscreen
+			&& Main.LocalPlayer.active && !Main.LocalPlayer.dead
+			&& Main.LocalPlayer.GetModPlayer<GhosteyePlayer>().Equipped;
+
+		public override void Load()
 		{
 			if (Main.dedServ) return;
 
-			Player player = Main.LocalPlayer;
-			if (player == null || !player.active) return;
+			ui = new UserInterface();
+			state = new GhosteyeState(this);
+		}
 
-			GhosteyePlayer mp = player.GetModPlayer<GhosteyePlayer>();
-			if (!mp.Equipped) return;
+		public override void OnWorldUnload()
+		{
+			guideOpen = false;
+			selectedSkill = 0;
+			ui?.SetState(null);
+		}
 
-			Texture2D pixel = TextureAssets.MagicPixel.Value;
+		public override void Unload()
+		{
+			ui = null;
+			state = null;
+		}
 
-			// ---- 装备格 ----
-			Rectangle slot = new Rectangle((int)Anchor.X, (int)Anchor.Y, 56, 56);
-			spriteBatch.Draw(pixel, slot, new Color(28, 6, 10) * 0.88f);
-			DrawBorder(spriteBatch, pixel, slot, new Color(150, 40, 50) * 0.9f);
+		internal void ToggleGuide()
+		{
+			if (CanShow) guideOpen = !guideOpen;
+		}
 
-			int tier = GhosteyePlayer.CalculateTier();
-			Texture2D eye = ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
-			Vector2 eyeCenter = new Vector2(slot.X + slot.Width / 2f, slot.Y + slot.Height / 2f);
-			spriteBatch.Draw(eye, eyeCenter, null, Color.White, 0f, eye.Size() / 2f, 1f, SpriteEffects.None, 0f);
-
-			// ---- 复苏值条 ----
-			int barX = slot.Right + 10;
-			int barY = slot.Y + 14;
-			int barW = 180;
-			int barH = 16;
-
-			Rectangle barBack = new Rectangle(barX, barY, barW, barH);
-			spriteBatch.Draw(pixel, barBack, new Color(38, 8, 12) * 0.88f);
-
-			bool mastered = tier >= GhosteyePlayer.AwakenedTier;
-			float ratio = mastered ? 0f : mp.Revival / GhosteyePlayer.MaxRevival;
-			Rectangle barFill = new Rectangle(barX, barY, (int)(barW * ratio), barH);
-			spriteBatch.Draw(pixel, barFill, new Color(214, 40, 52));
-
-			DrawBorder(spriteBatch, pixel, barBack, new Color(120, 30, 40) * 0.9f);
-
-			// 数值
-			string label = mastered ? "复苏已平息" : $"复苏 {(int)mp.Revival}";
-			Utils.DrawBorderString(spriteBatch, label, new Vector2(barX + barW + 8, barY - 2), Color.White, 0.75f);
-
-			// 层数
-			Utils.DrawBorderString(spriteBatch, $"第 {tier} 层", new Vector2(barX, barY - 22f), new Color(220, 150, 150), 0.8f);
-
-			// 状态行从条下面开始，逐行往下排，避免不同层数时位置跳动。
-			float lineY = barY + barH + 4f;
-			const float lineStep = 18f;
-
-			// 鬼域
-			if (mp.DomainOn)
+		public override void UpdateUI(GameTime gameTime)
+		{
+			if (!CanShow)
 			{
-				Utils.DrawBorderString(spriteBatch, mastered ? "鬼域 完全复苏" : "鬼域 开启中",
-					new Vector2(barX, lineY), mastered ? new Color(255, 219, 207) : new Color(230, 90, 90), 0.75f);
-			}
-			else if (mp.DomainCooldown > 0)
-			{
-				Utils.DrawBorderString(spriteBatch, $"鬼眼闭合 {mp.DomainCooldown / 60 + 1}s", new Vector2(barX, lineY), new Color(150, 130, 130), 0.75f);
-			}
-			lineY += lineStep;
-
-			// 激光：第五层起
-			if (tier >= 5)
-			{
-				bool ready = mp.DomainOn && mp.BeamCooldown <= 0;
-				string text = !mp.DomainOn
-					? "激光 需开域"
-					: mp.BeamCooldown > 0
-						? $"激光 冷却 {mp.BeamCooldown / 60 + 1}s"
-						: "激光 就绪";
-
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready ? new Color(255, 150, 150) : new Color(140, 120, 120), 0.72f);
-				lineY += lineStep;
+				guideOpen = false;
+				ui?.SetState(null);
+				return;
 			}
 
-			// 静止：第六层起
-			if (tier >= 6)
-			{
-				bool ready = mp.DomainOn && mp.StillCooldown <= 0;
-				string text = !mp.DomainOn
-					? "静止 需开域"
-					: mp.StillCooldown > 0
-						? $"静止 冷却 {mp.StillCooldown / 60 + 1}s"
-						: "静止 就绪";
+			if (ui.CurrentState == null) ui.SetState(state);
+			ui.Update(gameTime);
+			if (guideOpen || GuideButton.Contains(HudLayout.ToLocal(ui.MousePosition)))
+				Main.LocalPlayer.mouseInterface = true;
+		}
 
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready ? new Color(150, 200, 230) : new Color(140, 120, 120), 0.72f);
-				lineY += lineStep;
+		public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
+		{
+			int index = layers.FindIndex(layer => layer.Name == "Vanilla: Resource Bars");
+			if (index < 0) index = layers.FindIndex(layer => layer.Name == "Vanilla: Inventory");
+			if (index < 0) return;
+
+			layers.Insert(index, new LegacyGameInterfaceLayer("SpectesGaze: Ghosteye",
+				() =>
+				{
+					if (CanShow && ui?.CurrentState != null) ui.Draw(Main.spriteBatch, new GameTime());
+					return true;
+				}, InterfaceScaleType.UI));
+		}
+
+		private readonly record struct Layout(Vector2 Origin, float Scale)
+		{
+			public Point ToLocal(Vector2 point) => ((point - Origin) / Scale).ToPoint();
+		}
+
+		private Layout HudLayout => GetLayout(HudWidth, HudHeight, centered: false);
+		private Layout GuideLayout => GetLayout(GuideWidth, GuideHeight, centered: true);
+
+		private Layout GetLayout(int width, int height, bool centered)
+		{
+			CalculatedStyle dimensions = ui.GetDimensions();
+			Vector2 view = new(dimensions.Width, dimensions.Height);
+			float scale = MathHelper.Clamp(Math.Min((view.X - 20f) / width, (view.Y - 20f) / height), 0.1f, 1f);
+			Vector2 origin = new((view.X - width * scale) / 2f, centered ? (view.Y - height * scale) / 2f : 9f);
+			return new Layout(origin, scale);
+		}
+
+		private void Click(Vector2 pointer)
+		{
+			if (!CanShow) return;
+
+			if (!guideOpen)
+			{
+				if (GuideButton.Contains(HudLayout.ToLocal(pointer))) ToggleGuide();
+				return;
 			}
 
-			// 重启自身：第七层起
-			if (tier >= 7)
+			Point position = GuideLayout.ToLocal(pointer);
+			if (CloseButton.Contains(position))
 			{
-				bool ready = mp.DomainOn && mp.RestartCooldown <= 0;
-				string text = !mp.DomainOn
-					? "重启 需开域"
-					: mp.RestartCooldown > 0
-						? $"重启 冷却 {mp.RestartCooldown / 60 + 1}s"
-						: "重启 就绪";
-
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready ? new Color(200, 160, 230) : new Color(140, 120, 120), 0.72f);
-				lineY += lineStep;
+				guideOpen = false;
+				return;
 			}
 
-			if (tier >= DomainRewind.RequiredTier)
+			for (int i = 0; i < Skills.Length; i++)
 			{
-				bool supported = Main.netMode == NetmodeID.SinglePlayer;
-				bool rewinding = supported && ModContent.GetInstance<DomainRewind>().IsRewinding;
-				bool ready = supported && mp.DomainOn && mp.RewindCooldown <= 0;
-				string text = !supported ? "大范围重启 仅单人"
-					: rewinding ? "大范围重启 回溯中"
-					: !mp.DomainOn ? "大范围重启 需开域"
-					: mp.RewindCooldown > 0 ? $"大范围重启 冷却 {(mp.RewindCooldown + 59) / 60}s"
-					: "大范围重启 就绪";
-
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY), ready || rewinding ? new Color(225, 135, 179) : new Color(140, 120, 120), 0.72f);
-				lineY += lineStep;
-			}
-
-			if (tier >= GhosteyePlayer.OverlapTier)
-			{
-				bool active = mp.DomainOn && mp.OverlapTime > 0;
-				bool ready = mp.DomainOn && mp.OverlapCooldown == 0;
-				string text = active
-					? $"鬼域叠加 ×{mp.AttackHitCount(tier)} {(mp.OverlapTime + 59) / 60}s"
-					: !mp.DomainOn ? "鬼域叠加 需开域"
-					: mp.OverlapCooldown > 0 ? $"鬼域叠加 冷却 {(mp.OverlapCooldown + 59) / 60}s"
-					: "鬼域叠加 就绪";
-
-				Utils.DrawBorderString(spriteBatch, text, new Vector2(barX, lineY),
-					active || ready ? new Color(250, 118, 149) : new Color(140, 120, 120), 0.72f);
+				if (!SkillRow(i).Contains(position)) continue;
+				selectedSkill = i;
+				return;
 			}
 		}
 
-		/// <summary>画一个空心矩形边框。用四条 MAGIC PIXEL 拼，一像素宽。</summary>
-		private static void DrawBorder(SpriteBatch sb, Texture2D pixel, Rectangle rect, Color color)
+		private sealed class GhosteyeState(GhosteyeUI owner) : UIState
 		{
-			sb.Draw(pixel, new Rectangle(rect.X, rect.Y, rect.Width, 1), color);
-			sb.Draw(pixel, new Rectangle(rect.X, rect.Bottom - 1, rect.Width, 1), color);
-			sb.Draw(pixel, new Rectangle(rect.X, rect.Y, 1, rect.Height), color);
-			sb.Draw(pixel, new Rectangle(rect.Right - 1, rect.Y, 1, rect.Height), color);
+			public override void LeftMouseDown(UIMouseEvent evt)
+			{
+				base.LeftMouseDown(evt);
+				owner.Click(evt.MousePosition);
+			}
+
+			protected override void DrawSelf(SpriteBatch spriteBatch)
+			{
+				GhosteyePlayer eye = Main.LocalPlayer.GetModPlayer<GhosteyePlayer>();
+				int tier = GhosteyePlayer.CalculateTier();
+				Vector2 mouse = owner.ui.MousePosition;
+				Layout layout = owner.guideOpen ? owner.GuideLayout : owner.HudLayout;
+				if (owner.guideOpen)
+					owner.DrawGuide(new Canvas(spriteBatch, layout), eye, tier, layout.ToLocal(mouse));
+				else
+					DrawHud(new Canvas(spriteBatch, layout), eye, tier, layout.ToLocal(mouse));
+			}
+		}
+
+		private static string Text(string key) => Language.GetTextValue("Mods.SpectesGaze.GhosteyeUI." + key);
+
+		private static string Text(string key, object arg) =>
+			Language.GetTextValue("Mods.SpectesGaze.GhosteyeUI." + key, arg);
+
+		private static string Binding(ModKeybind key)
+		{
+			InputMode mode = PlayerInput.UsingGamepad ? InputMode.XBoxGamepad : InputMode.Keyboard;
+			var keys = key?.GetAssignedKeys(mode);
+			return keys is { Count: > 0 } ? string.Join(" / ", keys) : Text("Unbound");
+		}
+
+		private static int Seconds(int ticks) => (ticks + 59) / 60;
+
+		private static void DrawHud(Canvas art, GhosteyePlayer eye, int tier, Point mouse)
+		{
+			art.Frame(new Rectangle(0, 0, HudWidth, HudHeight), compact: true);
+			art.Sprite(Eye(tier), new Vector2(32f, 34f), new Vector2(42f), Color.White);
+			art.Line(new Vector2(59f, 13f), new Vector2(59f, 43f), 1f, Rim);
+
+			bool mastered = tier >= GhosteyePlayer.AwakenedTier;
+			art.Label(Text("Tier", tier), 71, 12, Bone, 0.84f, 85);
+			art.Label(DomainStatus(eye, mastered), 163, 12, eye.DomainOn ? PulseRed : Dust, 0.78f, 157);
+			art.Fill(new Rectangle(71, 34, 137, 5), new Color(61, 24, 38));
+			float revival = MathHelper.Clamp(eye.Revival / GhosteyePlayer.MaxRevival, 0f, 1f);
+			float fill = mastered ? 1f : revival;
+			art.Fill(new Rectangle(71, 34, (int)(137 * fill), 5), mastered ? new Color(206, 166, 151) : PulseRed);
+			art.Label(mastered ? Text("RevivalEnded") : Text("Revival", (int)eye.Revival), 217, 26, Bone, 0.72f, 105);
+			art.Button(GuideButton, Text("OpenGuide"), GuideButton.Contains(mouse));
+
+			art.Line(new Vector2(15f, 47f), new Vector2(425f, 47f), 1f, Rim);
+			if (!eye.DomainOn)
+			{
+				art.Label(Text("OpenDomainWith", Binding(SpectesGaze.GazeKey)), 220, 53, Dust, 0.71f, 385, 0.5f);
+				return;
+			}
+			if (tier < 5)
+			{
+				art.Label(Text("DomainDiameter", GhosteyePlayer.DomainRadiusOf(tier) / 8f), 220, 53, Dust, 0.71f, 385, 0.5f);
+				return;
+			}
+
+			int count = Math.Min(tier, GhosteyePlayer.OverlapTier) - 4;
+			float width = 410f / count;
+			Slot(0, "BeamShort", eye.BeamCooldown);
+			if (tier >= 6) Slot(1, "StillShort", eye.StillCooldown);
+			if (tier >= 7) Slot(2, "RestartShort", eye.RestartCooldown);
+			if (tier >= 8)
+			{
+				string status = Main.netMode != NetmodeID.SinglePlayer ? Text("Solo")
+					: ModContent.GetInstance<DomainRewind>().IsRewinding ? Text("Rewinding") : null;
+				Slot(3, "RewindShort", eye.RewindCooldown, status);
+			}
+			if (tier >= GhosteyePlayer.OverlapTier)
+				Slot(4, "OverlapShort", eye.OverlapCooldown,
+					eye.OverlapTime > 0 ? $"×{eye.AttackHitCount(tier)} · {Seconds(eye.OverlapTime)}s" : null);
+
+			void Slot(int index, string label, int cooldown, string status = null)
+			{
+				bool ready = cooldown == 0 || mastered;
+				string value = status ?? (ready ? Text("Ready") : $"{Seconds(cooldown)}s");
+				float x = 15 + (index + 0.5f) * width;
+				art.Label($"{Text(label)} {value}", x, 53, ready || status != null ? Bone : Dust, 0.73f, width - 7, 0.5f);
+			}
+		}
+
+		private static string DomainStatus(GhosteyePlayer eye, bool mastered)
+		{
+			if (eye.DomainOn) return Text(mastered ? "DomainAwakened" : "DomainOpen");
+			return eye.DomainCooldown > 0 && !mastered ? Text("DomainLock", Seconds(eye.DomainCooldown)) : Text("DomainClosed");
 		}
 	}
 }

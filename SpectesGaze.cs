@@ -24,6 +24,7 @@ namespace SpectesGaze
 		public static ModKeybind OverlapKey { get; private set; }
 
 		public static ModKeybind GrabKey { get; private set; }
+		public static ModKeybind GuideKey { get; private set; }
 
 		// 测试用：一键把复苏值清零。正式发布前删掉。
 		public static ModKeybind ResetKey { get; private set; }
@@ -37,6 +38,7 @@ namespace SpectesGaze
 			RewindKey = KeybindLoader.RegisterKeybind(this, "RewindDomain", "None");
 			OverlapKey = KeybindLoader.RegisterKeybind(this, "OverlapDomain", "None");
 			GrabKey = KeybindLoader.RegisterKeybind(this, "GrabInDomain", "Z");
+			GuideKey = KeybindLoader.RegisterKeybind(this, "GhosteyeGuide", "J");
 			ResetKey = KeybindLoader.RegisterKeybind(this, "ResetRevival", "F10");
 		}
 
@@ -50,6 +52,7 @@ namespace SpectesGaze
 			RewindKey = null;
 			OverlapKey = null;
 			GrabKey = null;
+			GuideKey = null;
 			ResetKey = null;
 		}
 	}
