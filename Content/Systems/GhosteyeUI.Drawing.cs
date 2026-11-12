@@ -3,7 +3,6 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
-using Terraria.ModLoader;
 
 namespace SpectesGaze.Content.Systems
 {
@@ -14,12 +13,60 @@ namespace SpectesGaze.Content.Systems
 		private static readonly Color PulseRed = new(244, 104, 122);
 		private static readonly Color Rim = new(100, 36, 54);
 		private static readonly Color Ink = new(19, 8, 15);
+		private static Texture2D hudFrame;
+		private static Texture2D guideFrame;
 
-		private static Texture2D Eye(int tier) =>
-			ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{tier}").Value;
+		private static Texture2D FrameTexture(bool compact) => compact
+			? hudFrame ??= CreateFrame(HudWidth / 2, HudHeight / 2, 407)
+			: guideFrame ??= CreateFrame(GuideWidth / 2, GuideHeight / 2, 803);
 
-		private static Texture2D Core =>
-			ModContent.Request<Texture2D>("SpectesGaze/Content/Textures/Effects/DomainCore").Value;
+		private static void DisposeFrames()
+		{
+			Texture2D hud = hudFrame;
+			Texture2D guide = guideFrame;
+			hudFrame = guideFrame = null;
+			if (hud == null && guide == null) return;
+
+			Main.QueueMainThreadAction(() =>
+			{
+				hud?.Dispose();
+				guide?.Dispose();
+			});
+		}
+
+		private static Texture2D CreateFrame(int width, int height, uint seed)
+		{
+			Color[] pixels = new Color[width * height];
+			Color driedBlood = new(51, 0, 0);
+			Color flesh = new(128, 0, 0);
+			Color bruised = new(44, 13, 31);
+			for (int y = 0; y < height; y++)
+			{
+				float left = 1.6f + 2.1f * FleshNoise.Perlin(9f, y * 0.16f, seed);
+				float right = 1.8f + 2.8f * FleshNoise.Perlin(13f, y * 0.11f, seed + 31);
+				for (int x = 0; x < width; x++)
+				{
+					float top = 1.9f + FleshNoise.Perlin(x * 0.17f, 2f, seed + 9) * 2.9f;
+					float bottom = 2.4f + FleshNoise.Perlin(x * 0.12f, 5f, seed + 67) * 3.2f;
+					float edge = Math.Min(Math.Min(x - left, width - 1 - x - right),
+						Math.Min(y - top, height - 1 - y - bottom));
+					if (edge < -0.35f) continue;
+
+					float grain = FleshNoise.Perlin(x * 0.31f, y * 0.26f, seed + 131);
+					float marbling = FleshNoise.Perlin(x * 0.074f + grain * 0.35f, y * 0.061f, seed + 719);
+					float wetEdge = MathHelper.Clamp(1f - Math.Abs(edge - 1f) * 0.39f, 0f, 1f);
+					float vein = MathHelper.Clamp((0.14f - Math.Abs(marbling + grain * 0.27f)) * 4.5f, 0f, 0.56f);
+					Color body = Color.Lerp(Ink, bruised, 0.19f + 0.23f * Math.Abs(grain));
+					body = Color.Lerp(body, driedBlood, vein);
+					body = Color.Lerp(body, flesh, wetEdge * (0.63f + 0.31f * grain));
+					pixels[y * width + x] = body * MathHelper.Clamp(edge + 0.45f, 0f, 0.98f);
+				}
+			}
+
+			Texture2D texture = new(Main.instance.GraphicsDevice, width, height);
+			texture.SetData(pixels);
+			return texture;
+		}
 
 		private readonly struct Canvas(SpriteBatch batch, Layout layout)
 		{
@@ -49,6 +96,26 @@ namespace SpectesGaze.Content.Systems
 					size / texture.Size() * layout.Scale, SpriteEffects.None, 0f);
 			}
 
+			public void Eye(int tier, Vector2 center, Vector2 size, Color tint, int seed)
+			{
+				ProceduralGhosteye.Draw(batch, At(center), size * layout.Scale, tier,
+					Main.GlobalTimeWrappedHourly, tint, seed: seed);
+			}
+
+			public void Seam(Vector2 start, Vector2 end, uint seed)
+			{
+				int segments = Math.Max(2, (int)((end.X - start.X) / 14f));
+				Vector2 previous = start;
+				for (int i = 1; i <= segments; i++)
+				{
+					Vector2 point = Vector2.Lerp(start, end, i / (float)segments);
+					point.Y += 2.1f * FleshNoise.Perlin(i * 0.71f, 0.34f, seed);
+					float stain = FleshNoise.Unit(seed + (uint)i * 61);
+					Line(previous, point, 0.8f + stain * 0.9f, Rim * (0.44f + stain * 0.47f));
+					previous = point;
+				}
+			}
+
 			public void Label(string text, float x, float y, Color color, float size, float maxWidth = 0, float anchor = 0)
 			{
 				if (string.IsNullOrEmpty(text)) return;
@@ -64,21 +131,18 @@ namespace SpectesGaze.Content.Systems
 
 			public void Button(Rectangle box, string label, bool hovered)
 			{
-				Fill(box, hovered ? new Color(101, 30, 48) : new Color(52, 17, 30));
-				Fill(new Rectangle(box.X, box.Y, box.Width, 1), hovered ? PulseRed : Rim);
+				Color tint = hovered ? Color.White : new Color(223, 167, 178);
+				Sprite(FrameTexture(true), box.Center.ToVector2(), box.Size(), tint);
+				Seam(new Vector2(box.Left + 4, box.Top + 2), new Vector2(box.Right - 4, box.Top + 3), 304);
 				Label(label, box.Center.X, box.Y + 5, Bone, 0.79f, box.Width - 8, 0.5f);
 			}
 
 			public void Frame(Rectangle box, bool compact = false)
 			{
-				Rectangle shadow = box;
-				shadow.Offset(0, 4);
-				Fill(shadow, Color.Black * 0.59f);
-				Fill(box, Ink * 0.97f);
-				Fill(new Rectangle(box.X, box.Y, box.Width, 2), Rim);
-				Fill(new Rectangle(box.X, box.Bottom - 2, box.Width, 2), Rim);
-				Fill(new Rectangle(box.X, box.Y, 1, box.Height), Rim);
-				Fill(new Rectangle(box.Right - 1, box.Y, 1, box.Height), Rim);
+				Texture2D texture = FrameTexture(compact);
+				Vector2 center = box.Center.ToVector2();
+				Sprite(texture, center + new Vector2(0f, 4f), box.Size(), Color.Black * 0.59f);
+				Sprite(texture, center, box.Size(), Color.White);
 
 				int corners = compact ? 2 : 4;
 				for (int i = 0; i < corners; i++)
@@ -86,10 +150,12 @@ namespace SpectesGaze.Content.Systems
 					float inward = i % 2 == 0 ? 1f : -1f;
 					float down = i < 2 ? 1f : -1f;
 					Vector2 corner = new(i % 2 == 0 ? box.Left + 1 : box.Right - 1, i < 2 ? box.Top + 1 : box.Bottom - 1);
-					Vector2 split = corner + new Vector2(inward * 12f, down * 6f);
-					Line(corner, split, compact ? 2.4f : 3.7f, PulseRed * 0.74f);
-					Line(split, split + new Vector2(inward * 26f, down * 6f), 1.3f, PulseRed * 0.58f);
-					Line(split, split + new Vector2(inward * 11f, down * (compact ? 12f : 22f)), 1.4f, Rim);
+					Vector2 split = corner + new Vector2(inward * (13 + i * 3), down * (4 + i % 3));
+					Vector2 fork = split + new Vector2(inward * (15 + i * 2), down * 4);
+					Line(corner, split, compact ? 2.4f : 3.7f, Rim);
+					Line(split, fork, 2f, PulseRed * 0.62f);
+					Line(fork, fork + new Vector2(inward * 15f, down * 7f), 0.9f, PulseRed * 0.45f);
+					Line(split, split + new Vector2(inward * 7f, down * (compact ? 11f : 18f)), 1.4f, Rim);
 				}
 			}
 		}

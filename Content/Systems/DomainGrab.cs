@@ -184,16 +184,23 @@ namespace SpectesGaze.Content.Systems
 			Vector2 direction = (target - origin).SafeNormalize(Vector2.UnitX);
 			Vector2 normal = new(-direction.Y, direction.X);
 			Vector2 previous = origin;
-			for (int i = 1; i <= 12; i++)
+			for (int i = 1; i <= 14; i++)
 			{
-				float progress = i / 12f;
-				float curl = MathF.Sin(progress * 18f - time * 8f) * MathF.Sin(progress * MathHelper.Pi);
-				Vector2 point = Vector2.Lerp(origin, target, progress) + normal * (curl * 6f);
-				DomainRenderer.DrawLine(previous, point, 7f, DomainRenderer.Light(DomainRenderer.Blood, 0.55f));
+				float progress = i / 14f;
+				float taper = 4f * progress * (1f - progress);
+				float curl = FleshNoise.Perlin(progress * 9.5f, time * 3.2f, 175) * 19f;
+				Vector2 point = Vector2.Lerp(origin, target, progress) + normal * (curl * taper);
+				float variation = FleshNoise.Unit((uint)i * 719);
+				DomainRenderer.DrawLine(previous, point, 2.5f + variation * 5.5f,
+					DomainRenderer.Light(DomainRenderer.Blood, 0.25f + variation * 0.25f));
+				if (variation > 0.78f)
+				{
+					Vector2 sag = new(variation * 8f - 4f, 6f + taper * 10f);
+					DomainRenderer.DrawLine(point, point + sag, 1.25f,
+						DomainRenderer.Light(DomainRenderer.Crimson, 0.23f));
+				}
 				previous = point;
 			}
-			DomainRenderer.DrawGlow(target, held.Size + new Vector2(29f),
-				DomainRenderer.Light(DomainRenderer.Ember, 0.36f + 0.21f * DomainRenderer.Wave(time * 5f)));
 		}
 	}
 }

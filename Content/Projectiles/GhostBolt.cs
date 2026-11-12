@@ -33,7 +33,7 @@ namespace SpectesGaze.Content.Projectiles
 
 		public override void AI()
 		{
-			// 贴图是横向的，所以旋转直接取速度方向，不需要再转 90 度。
+			// 保留朝向供血肉弹头绘制使用。
 			Projectile.rotation = Projectile.velocity.ToRotation();
 
 			// 轻微追踪：找到最近的敌人，每帧把方向往它偏一点。
@@ -46,7 +46,13 @@ namespace SpectesGaze.Content.Projectiles
 			}
 
 			if (!Main.dedServ)
-				Lighting.AddLight(Projectile.Center, 0.58f, 0.09f, 0.17f);
+			{
+				int age = 140 - Projectile.timeLeft;
+				GhosteyeEffects.EmitBoltTrail(Projectile.Center, Projectile.velocity, age, Projectile.identity);
+				float breath = FleshNoise.Perlin(age * 0.19f, 1.7f, (uint)Projectile.identity);
+				float light = MathHelper.Clamp(0.25f + breath * 0.16f, 0.12f, 0.36f);
+				Lighting.AddLight(Projectile.Center, light, light * 0.12f, light * 0.25f);
+			}
 		}
 
 		private NPC FindTarget()

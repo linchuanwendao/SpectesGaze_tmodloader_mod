@@ -52,7 +52,12 @@ namespace SpectesGaze.Content.Players
 			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.85f, Pitch = -0.8f }, Player.Center);
 		}
 
-		public override void UpdateDead() => OverlapTime = 0;
+		public override void UpdateDead()
+		{
+			DomainOn = false;
+			OverlapTime = 0;
+			boltTimer = 0;
+		}
 
 		public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone) =>
 			ApplyEchoHits(target, hit, damageDone);

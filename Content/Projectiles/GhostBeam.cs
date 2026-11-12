@@ -8,13 +8,7 @@ using SpectesGaze.Content.Systems;
 namespace SpectesGaze.Content.Projectiles
 {
 	/// <summary>
-	/// 主动大激光。朝鼠标方向持续一条完整的光束，没有前摇，按下就是全长全宽。
-	///
-	/// 生命周期的坑（实测踩过）：不要用 Projectile.timeLeft 计时。它在某些流程里会被重置，
-	/// 弹幕一两帧就没了，表现就是"瞬发"。改成 ai[1] 自己累加，timeLeft 只给一个大值兜底。
-	///
-	/// 判定也不走碰撞体。光束长 1600，做这么大的判定框既不精确也吃性能，
-	/// 改成每帧拿线段和敌人矩形求交。
+	/// 随鬼眼移动的持续光束。伤害由发射端使用整条线段判定。
 	/// </summary>
 	public class GhostBeam : ModProjectile
 	{
@@ -26,6 +20,7 @@ namespace SpectesGaze.Content.Projectiles
 
 		/// <summary>持续帧数。90 帧 = 1.5 秒。</summary>
 		public const int Duration = 90;
+		private Vector2 lastSyncedAim;
 
 		public override string Texture => "SpectesGaze/Content/Projectiles/GhostBeam";
 
@@ -48,6 +43,9 @@ namespace SpectesGaze.Content.Projectiles
 		// velocity 表示瞄准方向，位置由鬼眼每帧提供。
 		public override bool ShouldUpdatePosition() => false;
 
+		// 避免光束起点的弹幕矩形再算一次接触伤害。
+		public override bool? CanDamage() => false;
+
 		public override void AI()
 		{
 			Player player = Main.player[Projectile.owner];
@@ -68,10 +66,16 @@ namespace SpectesGaze.Content.Projectiles
 			GhosteyePlayer eye = player.GetModPlayer<GhosteyePlayer>();
 			Vector2 start = eye.FloatingEyeCenter;
 
-			// 只有发射者决定方向，其他人跟随同步过来的 velocity。
-			if (Projectile.owner == Main.myPlayer)
+			bool ownsBeam = Projectile.owner == Main.myPlayer;
+			if (ownsBeam)
 			{
 				Projectile.velocity = (Main.MouseWorld - start).SafeNormalize(Vector2.UnitX);
+				if (Main.netMode == NetmodeID.MultiplayerClient && (int)Projectile.ai[1] % 6 == 0
+					&& Vector2.Dot(Projectile.velocity, lastSyncedAim) < 0.9998f)
+				{
+					lastSyncedAim = Projectile.velocity;
+					Projectile.netUpdate = true;
+				}
 			}
 
 			Vector2 aim = Projectile.velocity.SafeNormalize(Vector2.UnitX);
@@ -82,11 +86,21 @@ namespace SpectesGaze.Content.Projectiles
 
 			if (!Main.dedServ)
 			{
-				for (int i = 0; i < 12; i++)
-					Lighting.AddLight(start + aim * (MaxLength * i / 12f), 0.43f, 0.045f, 0.095f);
+				int age = (int)Projectile.ai[1];
+				GhosteyeEffects.EmitBeamSpatter(start, aim, MaxLength, age, Projectile.identity);
+				Vector2 normal = new(-aim.Y, aim.X);
+				uint seed = (uint)Projectile.identity;
+				for (int i = 0; i < 8; i++)
+				{
+					float fray = FleshNoise.Perlin(i * 0.91f, age * 0.14f, seed);
+					float along = (i + 0.33f + 0.57f * FleshNoise.Unit(seed + (uint)i * 593u)) * (MaxLength / 8f);
+					float strength = MathHelper.Clamp(0.24f + fray * 0.19f, 0.09f, 0.35f);
+					Lighting.AddLight(start + aim * along + normal * (fray * 27f),
+						strength, strength * 0.11f, strength * 0.23f);
+				}
 			}
 
-			DealBeamDamage(eye, start, aim);
+			if (ownsBeam) DealBeamDamage(eye, start, aim);
 		}
 
 		/// <summary>线段与敌人矩形求交，命中就结算伤害。8 帧无敌间隔防止每帧重复打。</summary>

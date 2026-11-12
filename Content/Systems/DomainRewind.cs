@@ -42,7 +42,11 @@ namespace SpectesGaze.Content.Systems
 		{
 			tick++;
 			if (Main.netMode != NetmodeID.SinglePlayer || GhosteyePlayer.CalculateTier() < RequiredTier
-				|| !Main.LocalPlayer.GetModPlayer<GhosteyePlayer>().Equipped) return;
+				|| !Main.LocalPlayer.GetModPlayer<GhosteyePlayer>().Equipped)
+			{
+				targets.Clear();
+				return;
+			}
 
 			if (IsRewinding) AdvancePlayback();
 

@@ -49,6 +49,7 @@ namespace SpectesGaze.Content.Systems
 
 		public override void Unload()
 		{
+			DisposeFrames();
 			ui = null;
 			state = null;
 		}
@@ -167,7 +168,7 @@ namespace SpectesGaze.Content.Systems
 		private static void DrawHud(Canvas art, GhosteyePlayer eye, int tier, Point mouse)
 		{
 			art.Frame(new Rectangle(0, 0, HudWidth, HudHeight), compact: true);
-			art.Sprite(Eye(tier), new Vector2(32f, 34f), new Vector2(42f), Color.White);
+			art.Eye(tier, new Vector2(32f, 31f), new Vector2(49f, 41f), Color.White, seed: 117);
 			art.Line(new Vector2(59f, 13f), new Vector2(59f, 43f), 1f, Rim);
 
 			bool mastered = tier >= GhosteyePlayer.AwakenedTier;
@@ -180,7 +181,7 @@ namespace SpectesGaze.Content.Systems
 			art.Label(mastered ? Text("RevivalEnded") : Text("Revival", (int)eye.Revival), 217, 26, Bone, 0.72f, 105);
 			art.Button(GuideButton, Text("OpenGuide"), GuideButton.Contains(mouse));
 
-			art.Line(new Vector2(15f, 47f), new Vector2(425f, 47f), 1f, Rim);
+			art.Seam(new Vector2(15f, 47f), new Vector2(425f, 47f), 33);
 			if (!eye.DomainOn)
 			{
 				art.Label(Text("OpenDomainWith", Binding(SpectesGaze.GazeKey)), 220, 53, Dust, 0.71f, 385, 0.5f);

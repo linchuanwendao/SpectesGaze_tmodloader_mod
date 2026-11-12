@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -6,12 +5,13 @@ using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Players;
+using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.Items
 {
 	/// <summary>
 	/// 鬼眼。不是饰品，是消耗品：用一次就固化到玩家身上，之后再也拿不下来。
-	/// 图标按当前层数动态切换，直接读 Textures/Eyes 下的十张图。
+	/// 物品栏和地面图标由程序绘制，瞳孔会短促抽动。
 	/// </summary>
 	public class Ghosteye : ModItem
 	{
@@ -20,6 +20,7 @@ namespace SpectesGaze.Content.Items
 			Item.width = 48;
 			Item.height = 48;
 			Item.useStyle = ItemUseStyleID.HoldUp;
+			Item.noUseGraphic = true;
 			Item.useTime = 20;
 			Item.useAnimation = 20;
 			Item.maxStack = 1;
@@ -60,24 +61,18 @@ namespace SpectesGaze.Content.Items
 
 		// ---- 动态图标 ----
 
-		private static Texture2D EyeTexture(int tier)
-		{
-			int index = Math.Clamp(tier, 1, 10);
-			return ModContent.Request<Texture2D>($"SpectesGaze/Content/Textures/Eyes/Eye{index}").Value;
-		}
-
 		public override bool PreDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
 		{
-			Texture2D tex = EyeTexture(GhosteyePlayer.CalculateTier());
-			spriteBatch.Draw(tex, position, null, drawColor, 0f, origin, scale, SpriteEffects.None, 0f);
+			ProceduralGhosteye.Draw(spriteBatch, position, new Vector2(48f) * scale,
+				GhosteyePlayer.CalculateTier(), Main.GlobalTimeWrappedHourly, drawColor, seed: 271);
 			return false;
 		}
 
 		public override bool PreDrawInWorld(SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI)
 		{
-			Texture2D tex = EyeTexture(GhosteyePlayer.CalculateTier());
 			Vector2 pos = Item.Center - Main.screenPosition;
-			spriteBatch.Draw(tex, pos, null, lightColor, rotation, tex.Size() / 2f, scale, SpriteEffects.None, 0f);
+			ProceduralGhosteye.Draw(spriteBatch, pos, new Vector2(48f) * scale,
+				GhosteyePlayer.CalculateTier(), Main.GlobalTimeWrappedHourly, lightColor, rotation, whoAmI);
 			return false;
 		}
 
@@ -88,10 +83,10 @@ namespace SpectesGaze.Content.Items
 
 			Color tierColor = tier switch
 			{
-				>= 10 => new Color(255, 215, 0),
-				>= 7 => new Color(220, 60, 60),
-				>= 4 => new Color(190, 100, 220),
-				_ => new Color(120, 160, 220)
+				>= 10 => new Color(255, 199, 177),
+				>= 7 => new Color(231, 75, 81),
+				>= 4 => new Color(194, 87, 112),
+				_ => new Color(180, 124, 126)
 			};
 
 			tooltips.Add(new TooltipLine(Mod, "GhosteyeTier", $"第 {tier} 层") { OverrideColor = tierColor });
