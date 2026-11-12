@@ -88,6 +88,7 @@ namespace SpectesGaze.Content.Projectiles
 			{
 				int age = (int)Projectile.ai[1];
 				GhosteyeEffects.EmitBeamSpatter(start, aim, MaxLength, age, Projectile.identity);
+				ModContent.GetInstance<DomainRenderer>().EmitBeamSparks(start, aim, age);
 				Vector2 normal = new(-aim.Y, aim.X);
 				uint seed = (uint)Projectile.identity;
 				for (int i = 0; i < 8; i++)
@@ -125,6 +126,11 @@ namespace SpectesGaze.Content.Projectiles
 				eye.RecordDps(npc, damageDone);
 				eye.ApplyEchoHits(npc, hit, damageDone);
 				GhosteyeEffects.Impact(npc.Center, beam: true);
+				if (!Main.dedServ && damageDone > 0)
+				{
+					float along = MathHelper.Clamp(Vector2.Dot(npc.Center - start, aim), 0f, MaxLength);
+					ModContent.GetInstance<DomainRenderer>().EmitBeamHitSparks(start + aim * along, aim);
+				}
 			}
 		}
 

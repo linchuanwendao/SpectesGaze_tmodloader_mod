@@ -49,6 +49,7 @@ namespace SpectesGaze.Content.Projectiles
 			{
 				int age = 140 - Projectile.timeLeft;
 				GhosteyeEffects.EmitBoltTrail(Projectile.Center, Projectile.velocity, age, Projectile.identity);
+				ModContent.GetInstance<DomainRenderer>().EmitBoltSparks(Projectile.Center, Projectile.velocity, age);
 				float breath = FleshNoise.Perlin(age * 0.19f, 1.7f, (uint)Projectile.identity);
 				float light = MathHelper.Clamp(0.25f + breath * 0.16f, 0.12f, 0.36f);
 				Lighting.AddLight(Projectile.Center, light, light * 0.12f, light * 0.25f);
@@ -74,6 +75,12 @@ namespace SpectesGaze.Content.Projectiles
 			}
 
 			return best;
+		}
+
+		public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
+		{
+			if (!Main.dedServ && damageDone > 0)
+				ModContent.GetInstance<DomainRenderer>().EmitBoltHitSparks(Projectile.Center, Projectile.velocity);
 		}
 
 		public override void OnKill(int timeLeft) => GhosteyeEffects.Impact(Projectile.Center, beam: false);

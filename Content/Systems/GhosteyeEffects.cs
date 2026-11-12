@@ -344,7 +344,7 @@ namespace SpectesGaze.Content.Systems
 
 		private static float Range(float min, float max) => MathHelper.Lerp(min, max, VisualRandom.NextSingle());
 
-		private static bool NearScreen(Vector2 point)
+		internal static bool NearScreen(Vector2 point)
 		{
 			Vector2 screen = point - Main.screenPosition;
 			return screen.X >= -168f && screen.X <= Main.screenWidth + 168f

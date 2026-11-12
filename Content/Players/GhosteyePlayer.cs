@@ -214,12 +214,25 @@ namespace SpectesGaze.Content.Players
 		{
 			TryApplySlow(target);
 			TryApplyFlame(target);
+			EmitWeaponHitSparks(target, target.Center - Player.Center, hit, damageDone);
 		}
 
 		public override void OnHitNPCWithProj(Projectile proj, NPC target, NPC.HitInfo hit, int damageDone)
 		{
 			TryApplySlow(target);
 			TryApplyFlame(target);
+			if (proj.ModProjectile is not (Projectiles.GhostBolt or Projectiles.GhostBeam))
+				EmitWeaponHitSparks(target, proj.velocity, hit, damageDone);
+		}
+
+		private void EmitWeaponHitSparks(NPC target, Vector2 direction, NPC.HitInfo hit, int damageDone)
+		{
+			if (Main.dedServ || !Equipped || applyingEchoHits || damageDone <= 0 || Player.whoAmI != Main.myPlayer) return;
+
+			Vector2 heading = direction.SafeNormalize(new Vector2(Player.direction, 0f));
+			float inset = Math.Min(18f, Math.Min(target.width, target.height) * 0.36f);
+			Vector2 contact = target.Center - heading * inset;
+			ModContent.GetInstance<DomainRenderer>().EmitWeaponHitSparks(contact, heading, hit.Crit);
 		}
 
 		/// <summary>

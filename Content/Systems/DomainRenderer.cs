@@ -10,7 +10,7 @@ using static SpectesGaze.Content.Systems.FleshNoise;
 
 namespace SpectesGaze.Content.Systems
 {
-	public class DomainRenderer : ModSystem
+	public partial class DomainRenderer : ModSystem
 	{
 		internal static readonly Color Crimson = new(221, 28, 57);
 		internal static readonly Color Ember = new(248, 114, 127);
@@ -29,7 +29,7 @@ namespace SpectesGaze.Content.Systems
 		private static readonly Color DomainEdgePale = new(255, 224, 219);
 
 		private static Texture2D stain;
-		private static Texture2D domainEdgeStrip;
+		private static Texture2D softLineMask;
 		private int domainAge;
 		private float DomainFade => MathHelper.SmoothStep(0f, 1f, (domainAge + 1) / 23f);
 
@@ -41,18 +41,41 @@ namespace SpectesGaze.Content.Systems
 			{
 				stain?.Dispose();
 				stain = null;
-				domainEdgeStrip?.Dispose();
-				domainEdgeStrip = null;
+				softLineMask?.Dispose();
+				softLineMask = null;
 				DomainBloodBackdrop.Unload();
 				FleshPrimitives.Unload();
 			});
 		}
 
-		public override void OnWorldUnload() => domainAge = 0;
+		public override void OnWorldUnload()
+		{
+			domainAge = 0;
+			edgeSparks.Clear();
+			beamSparks.Clear();
+			lightAttackSparks.Clear();
+			beamImpactBursts = 0;
+			weaponSparkCooldown = 0;
+		}
 
 		public override void PostUpdateEverything()
 		{
-			if (!Main.dedServ) domainAge = HasDomain(Main.LocalPlayer) ? Math.Min(22, domainAge + 1) : 0;
+			if (Main.dedServ) return;
+
+			edgeSparks.Update();
+			beamSparks.Update();
+			lightAttackSparks.Update();
+			beamImpactBursts = 0;
+			if (weaponSparkCooldown > 0) weaponSparkCooldown--;
+			Player player = Main.LocalPlayer;
+			if (!HasDomain(player))
+			{
+				domainAge = 0;
+				return;
+			}
+
+			domainAge = Math.Min(22, domainAge + 1);
+			EmitEdgeSparks(player, Main.GlobalTimeWrappedHourly);
 		}
 
 		private static bool HasDomain(Player player)
@@ -90,6 +113,7 @@ namespace SpectesGaze.Content.Systems
 					DomainBloodBackdrop.Draw(batch, player.Center, domainRadius, time, DomainFade);
 					DrawDomainEdges(player.Center, domainRadius, tier, time, DomainFade, worldView, overlap);
 				}
+				edgeSparks.Draw(worldView);
 
 				// 活跃弹幕先占用顶点预算，施法残影过多时也能看见光束。
 				for (int i = 0; i < Main.maxProjectiles; i++)
@@ -128,11 +152,13 @@ namespace SpectesGaze.Content.Systems
 			// Primitive strips need their own effect. Submit them between the two sprite batches.
 			FleshPrimitives.Flush(Main.instance.GraphicsDevice, view);
 			bool drawEye = tier >= 3 && (hasDomain || firingEye.HasValue);
-			if (!drawEye && !hasVisibleBolt) return;
+			if (!drawEye && !hasVisibleBolt && beamSparks.IsEmpty && lightAttackSparks.IsEmpty) return;
 
 			BeginSpriteBatch(batch, view);
 			try
 			{
+				beamSparks.Draw(worldView);
+				lightAttackSparks.Draw(worldView);
 				if (hasVisibleBolt)
 				{
 					for (int i = 0; i < Main.maxProjectiles; i++)
@@ -170,14 +196,17 @@ namespace SpectesGaze.Content.Systems
 		{
 			Color edgeColor = tier >= GhosteyePlayer.AwakenedTier ? DomainEdgePale
 				: Color.Lerp(DomainEdgeBlood, new Color(158, 33, 69), (tier - 1) / 9f);
-			DrawDomainEdge(center, radius, time, edgeColor, fade, view);
+			float phase = EdgePulsePhase;
+			DrawDomainEdge(center, radius, time, edgeColor, fade, view, phase);
 			if (tier >= GhosteyePlayer.OverlapTier && overlap > 0f)
 			{
-				Vector2 echo = new(Perlin(time * 2.1f, 0.6f, 172u), Perlin(2.43f, time * 1.8f, 1u));
-				DrawDomainEdge(center + echo * (radius * 0.07f), radius * 0.81f, -time * 0.79f,
-					Color.Lerp(PaintBlood, Violet, 0.4f), fade * overlap * 0.58f, view);
+				DrawDomainEdge(OverlapEdgeCenter(center, radius, time), radius * 0.81f, -time * 0.79f,
+					Color.Lerp(PaintBlood, Violet, 0.4f), fade * overlap * 0.58f, view, -phase);
 			}
 		}
+
+		private static Vector2 OverlapEdgeCenter(Vector2 center, float radius, float time) =>
+			center + new Vector2(Perlin(time * 2.1f, 0.6f, 172u), Perlin(2.43f, time * 1.8f, 1u)) * (radius * 0.07f);
 
 		private static void DrawDomainMotes(Vector2 center, float radius, int tier, float time, float fade)
 		{
@@ -200,9 +229,12 @@ namespace SpectesGaze.Content.Systems
 		private static Color DomainColor(int tier) => Color.Lerp(PaintCrimson, Violet, (tier - 1) / 26f);
 
 		// 沿用 4cb3fd0 的撕裂轮廓和向内弯折的血丝，绘制在本地血色底纹之上。
-		private static void DrawDomainEdge(Vector2 center, float radius, float time, Color color, float opacity, Rectangle view)
+		private static void DrawDomainEdge(Vector2 center, float radius, float time, Color color, float opacity,
+			Rectangle view, float pulsePhase)
 		{
 			const int segments = 96;
+			Color pulseGlow = Color.Lerp(color, Crimson, 0.55f);
+			Color pulseCore = Color.Lerp(color, Pale, 0.48f);
 			Vector2 previous = center + Vector2.UnitX * (radius * DomainEdgeScale(0f, time));
 			for (int i = 1; i <= segments; i++)
 			{
@@ -212,9 +244,16 @@ namespace SpectesGaze.Content.Systems
 				if (Visible(previous, point, view))
 				{
 					float fray = 0.5f + 0.5f * MathF.Sin(angle * 19f - time * 1.8f + MathF.Sin(angle * 7f) * 2f);
-					DrawDomainEdgeLine(previous, point, 11f + radius * 0.058f, DomainEdgeShadow * (0.60f * opacity));
-					DrawDomainEdgeLine(previous, point, 3f + fray * (4f + radius * 0.013f),
+					DrawSoftLine(previous, point, 11f + radius * 0.058f, DomainEdgeShadow * (0.60f * opacity));
+					DrawSoftLine(previous, point, 3f + fray * (4f + radius * 0.013f),
 						Light(color, opacity * (0.19f + fray * 0.63f)));
+					float wave = 0.5f + 0.5f * MathF.Cos(angle * EdgePulseCount - pulsePhase);
+					float pulse = MathHelper.SmoothStep(0f, 1f, (wave - 0.72f) / 0.28f) * opacity;
+					if (pulse > 0.01f)
+					{
+						DrawSoftLine(previous, point, 10f + radius * 0.026f, Light(pulseGlow, pulse * 0.32f));
+						DrawSoftLine(previous, point, 1.5f + radius * 0.004f, Light(pulseCore, pulse * 0.42f));
+					}
 
 					if (i % 4 == 0)
 					{
@@ -223,8 +262,8 @@ namespace SpectesGaze.Content.Systems
 						float curl = MathF.Sin(angle * 13f - time * 1.1f);
 						Vector2 bend = point - radial * length * 0.46f + tangent * curl * length * 0.47f;
 						Vector2 tip = point - radial * length - tangent * curl * length * 0.28f;
-						DrawDomainEdgeLine(point, bend, 3f + fray * 5f, Light(color, opacity * fray * 0.72f));
-						DrawDomainEdgeLine(bend, tip, 2f + fray * 2f, Light(color, opacity * fray * 0.45f));
+						DrawSoftLine(point, bend, 3f + fray * 5f, Light(color, opacity * fray * 0.72f));
+						DrawSoftLine(bend, tip, 2f + fray * 2f, Light(color, opacity * fray * 0.45f));
 					}
 				}
 				previous = point;
@@ -236,19 +275,20 @@ namespace SpectesGaze.Content.Systems
 			+ 0.011f * MathF.Sin(27f * angle + time * 1.5f)
 			+ 0.005f * MathF.Sin(43f * angle - time * 2f);
 
-		private static void DrawDomainEdgeLine(Vector2 from, Vector2 to, float width, Color color)
+		private static void DrawSoftLine(Vector2 from, Vector2 to, float width, Color color)
 		{
 			Vector2 delta = to - from;
 			float length = delta.Length();
 			if (length < 0.01f) return;
 
-			domainEdgeStrip ??= CreateDomainEdgeStrip();
-			Main.spriteBatch.Draw(domainEdgeStrip, (from + to) / 2f - Main.screenPosition, null, color,
-				delta.ToRotation(), domainEdgeStrip.Size() / 2f,
-				new Vector2(length + Math.Min(width * 0.12f, 2f), width) / domainEdgeStrip.Size(), SpriteEffects.None, 0f);
+			softLineMask ??= CreateSoftLineMask();
+			Vector2 textureSize = softLineMask.Size();
+			Main.spriteBatch.Draw(softLineMask, (from + to) / 2f - Main.screenPosition, null, color,
+				delta.ToRotation(), textureSize / 2f,
+				new Vector2(length + Math.Min(width * 0.12f, 2f), width) / textureSize, SpriteEffects.None, 0f);
 		}
 
-		private static Texture2D CreateDomainEdgeStrip()
+		private static Texture2D CreateSoftLineMask()
 		{
 			const int height = 32;
 			Color[] pixels = new Color[2 * height];
