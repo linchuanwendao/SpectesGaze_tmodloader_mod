@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 using SpectesGaze.Content.Players;
 using SpectesGaze.Content.Systems;
@@ -100,11 +101,23 @@ namespace SpectesGaze.Content.Items
 
 		public override void AddRecipes()
 		{
-			// 临时配方，测试用。正式版换成设定相关的材料。
 			Recipe recipe = CreateRecipe();
-			recipe.AddIngredient(ItemID.DirtBlock, 10);
+			recipe.AddIngredient(ItemID.Lens, 10);
+			recipe.AddRecipeGroup(GhosteyeRecipeGroups.EvilMaterials, 20);
 			recipe.AddTile(TileID.WorkBenches);
 			recipe.Register();
+		}
+	}
+
+	internal sealed class GhosteyeRecipeGroups : ModSystem
+	{
+		internal const string EvilMaterials = "SpectesGaze:EvilMaterials";
+
+		public override void AddRecipeGroups()
+		{
+			RecipeGroup.RegisterGroup(EvilMaterials, new RecipeGroup(
+				() => Language.GetTextValue("Mods.SpectesGaze.RecipeGroups.EvilMaterials"),
+				ItemID.RottenChunk, ItemID.Vertebrae));
 		}
 	}
 }

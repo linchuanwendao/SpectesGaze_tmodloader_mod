@@ -37,6 +37,11 @@ Buffs: {
 		DisplayName: Stillness
 		Description: Even breathing is held down.
 	}
+
+	RevivalOverload: {
+		DisplayName: Revival Overload
+		Description: On trigger, lose 20% of max life and temporarily close the Ghosteye.
+	}
 }
 
 Keybinds: {
@@ -48,14 +53,22 @@ Keybinds: {
 	OverlapDomain.DisplayName: Overlap Domain
 	GrabInDomain.DisplayName: Grab in Domain
 	GhosteyeGuide.DisplayName: Ghosteye Skill Guide
-	ResetRevival.DisplayName: Clear Revival (Test)
+}
+
+RecipeGroups: {
+	EvilMaterials: Rotten Chunks or Vertebrae
+}
+
+RevivalMessages: {
+	Overflow: Revival overflowed, forcing the Ghosteye shut.
+	Death: "{0} was consumed by the waking Ghosteye."
 }
 
 GhosteyeUI: {
 	Title: Ghosteye Skill Guide
 	OpenGuide: Skill Guide
 	Tier: Tier {0}
-	Revival: Revival {0}
+	Revival: Revival {0}/{1}
 	RevivalEnded: Revival Suppressed
 	DomainOpen: Domain Open
 	DomainClosed: Domain Closed
@@ -93,9 +106,9 @@ GhosteyeUI: {
 				'''
 				Opening inflicts Ghastly Gaze for 5 seconds on enemies in range.
 				Gain 20% movement speed, 15% damage, 8% crit and knockback immunity.
-				Weapon or projectile hits have a 5% chance to slow for 3 seconds.
-				Revival rises by 1.5 per second and closes the eye for 30s at 100.
-				Higher Revival increases damage dealt and taken.
+				Hits may slow (5%, 3s). Revival raises damage dealt and taken.
+				Below tier 10, gain 1.5 Revival/s. Cap starts at 100 and rises by 10 per tier.
+				At the cap, lose 20% of max life and the eye closes for 30s.
 				'''
 		}
 		Teleport: {

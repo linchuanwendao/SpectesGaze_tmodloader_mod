@@ -37,6 +37,11 @@ Buffs: {
 		DisplayName: 静止
 		Description: 连呼吸都被按住。
 	}
+
+	RevivalOverload: {
+		DisplayName: 复苏过载
+		Description: 触发时失去最大生命值的 20%，鬼眼暂时闭合。
+	}
 }
 
 Keybinds: {
@@ -48,14 +53,22 @@ Keybinds: {
 	OverlapDomain.DisplayName: 鬼域叠加
 	GrabInDomain.DisplayName: 鬼域抓取
 	GhosteyeGuide.DisplayName: 鬼眼技能说明
-	ResetRevival.DisplayName: 清零复苏值（测试）
+}
+
+RecipeGroups: {
+	EvilMaterials: 腐肉或椎骨
+}
+
+RevivalMessages: {
+	Overflow: 复苏值溢满，鬼眼强行闭合。
+	Death: "{0} 被复苏的鬼眼夺走了性命。"
 }
 
 GhosteyeUI: {
 	Title: 鬼眼 · 技能说明
 	OpenGuide: 技能说明
 	Tier: 第 {0} 层
-	Revival: 复苏 {0}
+	Revival: 复苏 {0}/{1}
 	RevivalEnded: 复苏已平息
 	DomainOpen: 鬼域展开
 	DomainClosed: 鬼域关闭
@@ -88,14 +101,14 @@ GhosteyeUI: {
 
 	Skills: {
 		Domain: {
-			Name: 展开鬼域
+			Name: 鬼域展开
 			Effect:
 				'''
 				开域时，对范围内敌人施加 5 秒凝视。
 				开域后移速 +20%、伤害 +15%、暴击 +8 个百分点，免疫击退。
-				武器或弹幕命中有 5% 概率让敌人减速 3 秒。
-				复苏值每秒增加 1.5 点。达到 100 时鬼眼闭合 30 秒。
-				复苏值越高，造成和受到的伤害越高。
+				命中有 5% 概率减速 3 秒。复苏越高，伤害和承伤越高。
+				十层前复苏值每秒加 1.5 点。上限从 100 起，每层加 10。
+				溢满时失去最大生命值的 20%，鬼眼闭合 30 秒。
 				'''
 		}
 		Teleport: {
@@ -118,7 +131,7 @@ GhosteyeUI: {
 				'''
 		}
 		Sight: {
-			Name: 看见灵异
+			Name: 窥探真实
 			Effect:
 				'''
 				融合鬼眼并达到三层后，可透过地形看见生物轮廓。
@@ -126,7 +139,7 @@ GhosteyeUI: {
 				'''
 		}
 		Flame: {
-			Name: 鬼火灼烧
+			Name: 鬼火
 			Effect:
 				'''
 				武器或弹幕命中敌人时，使其燃烧 5 秒。
@@ -135,7 +148,7 @@ GhosteyeUI: {
 				'''
 		}
 		Bolt: {
-			Name: 鬼眼光弹
+			Name: 溅血
 			Effect:
 				'''
 				开域后，悬浮鬼眼每隔 0.75 秒搜索范围内最近的敌人。
@@ -144,7 +157,7 @@ GhosteyeUI: {
 				'''
 		}
 		Beam: {
-			Name: 鬼眼激光
+			Name: 湮灭
 			Effect:
 				'''
 				开域后，悬浮鬼眼朝鼠标持续发射光束 1.5 秒。
@@ -153,7 +166,7 @@ GhosteyeUI: {
 				'''
 		}
 		Still: {
-			Name: 静止鬼域
+			Name: 静止
 			Effect:
 				'''
 				开域后，锁住范围内敌人的位置。
@@ -189,7 +202,7 @@ GhosteyeUI: {
 				'''
 		}
 		Awaken: {
-			Name: 完全复苏
+			Name: 死机
 			Effect:
 				'''
 				十层起，复苏值平息，鬼眼技能免消耗和冷却。

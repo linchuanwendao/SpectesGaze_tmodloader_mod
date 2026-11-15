@@ -156,6 +156,9 @@ namespace SpectesGaze.Content.Systems
 		private static string Text(string key, object arg) =>
 			Language.GetTextValue("Mods.SpectesGaze.GhosteyeUI." + key, arg);
 
+		private static string Text(string key, object first, object second) =>
+			Language.GetTextValue("Mods.SpectesGaze.GhosteyeUI." + key, first, second);
+
 		private static string Binding(ModKeybind key)
 		{
 			InputMode mode = PlayerInput.UsingGamepad ? InputMode.XBoxGamepad : InputMode.Keyboard;
@@ -175,10 +178,10 @@ namespace SpectesGaze.Content.Systems
 			art.Label(Text("Tier", tier), 71, 12, Bone, 0.84f, 85);
 			art.Label(DomainStatus(eye, mastered), 163, 12, eye.DomainOn ? PulseRed : Dust, 0.78f, 157);
 			art.Fill(new Rectangle(71, 34, 137, 5), new Color(61, 24, 38));
-			float revival = MathHelper.Clamp(eye.Revival / GhosteyePlayer.MaxRevival, 0f, 1f);
-			float fill = mastered ? 1f : revival;
+			float fill = mastered ? 1f : eye.RevivalRatio(tier);
 			art.Fill(new Rectangle(71, 34, (int)(137 * fill), 5), mastered ? new Color(206, 166, 151) : PulseRed);
-			art.Label(mastered ? Text("RevivalEnded") : Text("Revival", (int)eye.Revival), 217, 26, Bone, 0.72f, 105);
+			string revival = mastered ? Text("RevivalEnded") : Text("Revival", (int)eye.Revival, GhosteyePlayer.RevivalLimitOf(tier));
+			art.Label(revival, 217, 26, Bone, 0.72f, 105);
 			art.Button(GuideButton, Text("OpenGuide"), GuideButton.Contains(mouse));
 
 			art.Seam(new Vector2(15f, 47f), new Vector2(425f, 47f), 33);

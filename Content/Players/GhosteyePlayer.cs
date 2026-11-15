@@ -2,8 +2,10 @@ using System;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.Audio;
+using Terraria.DataStructures;
 using Terraria.GameInput;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 using SpectesGaze.Content.Buffs;
@@ -25,16 +27,27 @@ namespace SpectesGaze.Content.Players
 
 		// ================= 复苏值 =================
 
-		public const float MaxRevival = 100f;
+		private const int BaseRevivalLimit = 100;
+		private const int RevivalLimitPerTier = 10;
+		private const float RevivalAfterOverflowRatio = 0.6f;
 
-		/// <summary>0 ~ 100。越高输出越高，同时受到的伤害也越高。只涨不跌，升层时清零。</summary>
+		/// <summary>越接近当前层的上限，输出和承伤越高。升层时清零。</summary>
 		public float Revival;
 
 		/// <summary>输出加成比例，满值 +60%。</summary>
-		public float RevivalDamageBonus => 0.6f * (Revival / MaxRevival);
+		public float RevivalDamageBonus => 0.6f * RevivalRatio(CalculateTier());
 
 		/// <summary>受伤加成比例，满值 +50%。</summary>
-		public float RevivalHurtBonus => 0.5f * (Revival / MaxRevival);
+		public float RevivalHurtBonus => 0.5f * RevivalRatio(CalculateTier());
+
+		internal static int RevivalLimitOf(int tier) =>
+			tier >= AwakenedTier ? 0 : BaseRevivalLimit + (Math.Max(1, tier) - 1) * RevivalLimitPerTier;
+
+		internal float RevivalRatio(int tier)
+		{
+			int limit = RevivalLimitOf(tier);
+			return limit > 0 ? Math.Clamp(Revival / limit, 0f, 1f) : 0f;
+		}
 
 		// ================= 鬼域状态 =================
 
@@ -87,8 +100,8 @@ namespace SpectesGaze.Content.Players
 			return RadiusByTier[Math.Clamp(tier - 1, 0, RadiusByTier.Length - 1)];
 		}
 
-		/// <summary>鬼域开着时每秒涨多少复苏值。</summary>
-		private const float RevivalDrainPerTick = 0.025f;
+		/// <summary>鬼域开着时每帧增加的复苏值。</summary>
+		private const float RevivalGainPerTick = 0.025f;
 
 		// ================= 装备流程 =================
 
@@ -131,14 +144,7 @@ namespace SpectesGaze.Content.Players
 			if (DomainOn)
 			{
 				Player.AddBuff(ModContent.BuffType<GazeDomain>(), 2);
-
-				if (tier < AwakenedTier) Revival = Math.Min(MaxRevival, Revival + RevivalDrainPerTick);
-
-				// 复苏值溢满，鬼眼被迫闭合，进入锁定。
-				if (Revival >= MaxRevival)
-				{
-					CloseDomain(true);
-				}
+				GainRevival(RevivalGainPerTick, tier);
 			}
 
 			// 检测升层：每提升一层，把上一级积累的复苏值清零。
@@ -325,12 +331,6 @@ namespace SpectesGaze.Content.Players
 			}
 
 			ModContent.GetInstance<DomainGrab>().HandleInput(Player, DomainOn);
-
-			// 测试用：清零复苏值。正式发布前删掉这段。
-			if (SpectesGaze.ResetKey != null && SpectesGaze.ResetKey.JustPressed)
-			{
-				ResetRevival();
-			}
 		}
 
 		/// <summary>
@@ -340,13 +340,6 @@ namespace SpectesGaze.Content.Players
 		{
 			int gap = Math.Max(0, CalculateTier() - skillTier);
 			return baseCost * Math.Max(0.2f, 1f - gap * 0.15f);
-		}
-
-		/// <summary>测试用。把复苏值直接清零，省得等自然回落。</summary>
-		public void ResetRevival()
-		{
-			Revival = 0f;
-			Main.NewText("[测试] 复苏值已清零", 130, 200, 130);
 		}
 
 		/// <summary>
@@ -543,18 +536,17 @@ namespace SpectesGaze.Content.Players
 				return;
 			}
 
-			// 理论上走不到这里：开域期间溢满会自动闭合并把值压到 60。
-			// 但如果存档异常让它停在 100，这里兜底回落，避免永久打不开。
-			if (Revival >= MaxRevival)
+			int tier = CalculateTier();
+			int limit = RevivalLimitOf(tier);
+			// 旧存档可能在闭域时已处于上限，允许从溢满后的回落值重新开域。
+			if (limit > 0 && Revival >= limit)
 			{
-				Revival = 60f;
+				Revival = limit * RevivalAfterOverflowRatio;
 			}
 
 			DomainOn = true;
-			GainRevival(SkillCost(10f, 1));
 
 			// 开启瞬间：范围内所有敌人挂上凝视。
-			int tier = CalculateTier();
 			float radius = DomainRadiusOf(tier);
 			if (tier >= AwakenedTier) GhosteyeEffects.AwakenDomain(Player.Center, radius);
 			else GhosteyeEffects.Open(Player.Center, radius);
@@ -570,31 +562,36 @@ namespace SpectesGaze.Content.Players
 			}
 
 			SoundEngine.PlaySound(SoundID.Item14 with { Volume = 0.6f, Pitch = -0.5f }, Player.Center);
+			GainRevival(SkillCost(10f, 1), tier);
 		}
 
 		private void CloseDomain(bool overflowed)
 		{
 			DomainOn = false;
 			OverlapTime = 0;
-			GhosteyeEffects.Close(Player.Center, DomainRadiusOf(CalculateTier()), overflowed);
+			int tier = CalculateTier();
+			GhosteyeEffects.Close(Player.Center, DomainRadiusOf(tier), overflowed);
+			if (!overflowed) return;
 
-			if (overflowed)
+			DomainCooldown = 60 * 30;
+			Revival = RevivalLimitOf(tier) * RevivalAfterOverflowRatio;
+			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.7f, Pitch = 0.3f }, Player.Center);
+			if (Player.whoAmI != Main.myPlayer || Main.dedServ) return;
+
+			Player.AddBuff(ModContent.BuffType<RevivalOverload>(), DomainCooldown);
+			Main.NewText(Language.GetTextValue("Mods.SpectesGaze.RevivalMessages.Overflow"), 200, 40, 40);
+			int loss = Math.Max(1, Player.statLifeMax2 / 5);
+			if (Player.statLife <= loss)
 			{
-				// 复苏值溢满导致的强制闭合，要锁一段时间。
-				DomainCooldown = 60 * 30;
-
-				// 关键：必须回落到一个安全值，否则玩家重新开域时复苏值仍是 100，
-				// 下一帧立刻又溢满、又强制闭合，会卡死在"永远开不了"的状态。
-				// 回落不算"自动下降"，这是鬼眼强行闭眼的代价。
-				Revival = 60f;
-
-				if (Player.whoAmI == Main.myPlayer)
-				{
-					Main.NewText("复苏值溢满，鬼眼强行闭合。", 200, 40, 40);
-				}
-
-				SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.7f, Pitch = 0.3f }, Player.Center);
+				NetworkText reason = NetworkText.FromKey("Mods.SpectesGaze.RevivalMessages.Death", Player.name);
+				Player.KillMe(PlayerDeathReason.ByCustomReason(reason), loss, 0);
+				return;
 			}
+
+			Player.statLife -= loss;
+			CombatText.NewText(Player.Hitbox, CombatText.DamagedFriendly, loss);
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				NetMessage.SendData(MessageID.PlayerLifeMana, number: Player.whoAmI);
 		}
 
 		private void TryTeleport()
@@ -648,6 +645,8 @@ namespace SpectesGaze.Content.Players
 		}
 
 		// ================= 存档 =================
+
+		public override void OnEnterWorld() => Revival = Math.Clamp(Revival, 0f, RevivalLimitOf(CalculateTier()));
 
 		public override void SaveData(TagCompound tag)
 		{

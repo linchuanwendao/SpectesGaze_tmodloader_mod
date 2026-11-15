@@ -3,6 +3,8 @@ using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
 using Terraria.ID;
+using Terraria.ModLoader;
+using SpectesGaze.Content.Buffs;
 using SpectesGaze.Content.Systems;
 
 namespace SpectesGaze.Content.Players
@@ -24,6 +26,7 @@ namespace SpectesGaze.Content.Players
 			if (tier >= AwakenedTier)
 			{
 				Revival = 0f;
+				if (lastTier < AwakenedTier || DomainCooldown > 0) Player.ClearBuff(ModContent.BuffType<RevivalOverload>());
 				DomainCooldown = BeamCooldown = StillCooldown = RestartCooldown = RewindCooldown = OverlapCooldown = 0;
 			}
 			else if (OverlapCooldown > 0)
@@ -34,8 +37,15 @@ namespace SpectesGaze.Content.Players
 
 		private static int TierCooldown(int ticks) => CalculateTier() >= AwakenedTier ? 0 : ticks;
 
-		private void GainRevival(float amount) =>
-			Revival = CalculateTier() >= AwakenedTier ? 0f : Math.Min(MaxRevival, Revival + amount);
+		private void GainRevival(float amount) => GainRevival(amount, CalculateTier());
+
+		private void GainRevival(float amount, int tier)
+		{
+			int limit = RevivalLimitOf(tier);
+			Revival = Math.Min(limit, Revival + amount);
+			if (limit > 0 && Revival >= limit && DomainOn)
+				CloseDomain(overflowed: true);
+		}
 
 		private void TryOverlapDomain()
 		{
