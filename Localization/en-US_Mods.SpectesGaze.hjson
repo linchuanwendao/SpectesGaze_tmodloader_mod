@@ -47,6 +47,7 @@ Buffs: {
 Keybinds: {
 	OpenDomain.DisplayName: Open Domain
 	FireBeam.DisplayName: Fire Ghost Beam
+	BloodFlight.DisplayName: Blood Flight
 	FreezeDomain.DisplayName: Freeze Domain
 	RestartSelf.DisplayName: Restart Self
 	RewindDomain.DisplayName: Rewind Domain
@@ -73,6 +74,7 @@ GhosteyeUI: {
 	DomainOpen: Domain Open
 	DomainClosed: Domain Closed
 	DomainAwakened: Fully Awakened
+	BloodFlightActive: In Blood Flight
 	DomainLock: Locked for {0}s
 	OpenDomainWith: Open Domain [{0}]
 	DomainDiameter: "{0} tiles across"
@@ -116,7 +118,7 @@ GhosteyeUI: {
 			Effect:
 				'''
 				Right-click inside an open domain to teleport to the cursor.
-				The route and destination must clear solid tiles.
+				Can cross solid tiles. The destination needs clear space in the domain.
 				Successful teleports add 3 Revival. Tier 10 removes the cost.
 				'''
 		}
@@ -128,6 +130,15 @@ GhosteyeUI: {
 				Tier 1 allows drops and critters. Tier 4 adds ordinary enemies.
 				Tier 8 adds town NPCs. Bosses and recognized parts are excluded.
 				Release the key to drop the target. Solid tiles block dragging.
+				'''
+		}
+		BloodFlight: {
+			Name: Blood Flight
+			Effect:
+				'''
+				With the domain open, become a blood-red streak and fly toward the cursor.
+				Slow to a hover near the cursor. Press again or close the domain to return.
+				Flight adds no Revival cost. The open domain still builds Revival as usual.
 				'''
 		}
 		Sight: {
@@ -160,7 +171,7 @@ GhosteyeUI: {
 			Name: Ghosteye Beam
 			Effect:
 				'''
-				The eye fires a 1.5-second beam toward the cursor in an open domain.
+				The eye widens and tracks the cursor, firing from its pupil for 1.5 seconds.
 				Cooldown is 20 seconds, reduced to 10 from tier 6.
 				Base Revival cost is 8 and decreases above tier 5.
 				'''

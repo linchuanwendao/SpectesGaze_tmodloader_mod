@@ -54,6 +54,9 @@ namespace SpectesGaze.Content.Systems
 			edgeSparks.Clear();
 			beamSparks.Clear();
 			lightAttackSparks.Clear();
+			Array.Clear(flightTrails);
+			flightParticles.Clear();
+			hasFlightTrails = false;
 			beamImpactBursts = 0;
 			weaponSparkCooldown = 0;
 		}
@@ -65,6 +68,7 @@ namespace SpectesGaze.Content.Systems
 			edgeSparks.Update();
 			beamSparks.Update();
 			lightAttackSparks.Update();
+			UpdateBloodFlightEffects();
 			beamImpactBursts = 0;
 			if (weaponSparkCooldown > 0) weaponSparkCooldown--;
 			Player player = Main.LocalPlayer;
@@ -99,8 +103,9 @@ namespace SpectesGaze.Content.Systems
 			worldView.Inflate(192, 192);
 			float time = Main.GlobalTimeWrappedHourly;
 			float overlap = hasDomain ? OverlapOpacity(player.GetModPlayer<GhosteyePlayer>().OverlapTime) : 0f;
-			Vector2? firingEye = null;
+			Projectile firingBeam = null;
 			bool hasVisibleBolt = false;
+			bool hasRemoteBeamEye = false;
 
 			SpriteBatch batch = Main.spriteBatch;
 			Matrix view = Main.GameViewMatrix.TransformationMatrix;
@@ -123,7 +128,8 @@ namespace SpectesGaze.Content.Systems
 					if (projectile.type == beamType)
 					{
 						DrawBeam(projectile, time, worldView);
-						if (projectile.owner == Main.myPlayer) firingEye = projectile.Center;
+						if (projectile.owner == Main.myPlayer) firingBeam = projectile;
+						else if (worldView.Contains(projectile.Center.ToPoint())) hasRemoteBeamEye = true;
 					}
 					else if (projectile.type == boltType && worldView.Intersects(projectile.Hitbox))
 					{
@@ -131,11 +137,12 @@ namespace SpectesGaze.Content.Systems
 					}
 				}
 
-				if (firingEye.HasValue && tier == 0) tier = GhosteyePlayer.CalculateTier();
-				if (tier >= 3 && (hasDomain || firingEye.HasValue))
+				if (firingBeam != null && tier == 0) tier = GhosteyePlayer.CalculateTier();
+				if (tier >= 3 && (hasDomain || firingBeam != null))
 				{
-					Vector2 eyePos = firingEye ?? player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
-					QueueEyeTendons(eyePos, tier, time, firingEye.HasValue ? 1f : DomainFade, player.whoAmI);
+					Vector2 eyePos = firingBeam?.Center ?? player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
+					float eyeSize = firingBeam == null ? EyeSize(tier, time) : GhostBeam.GetFiringEye(firingBeam, tier).Size;
+					QueueEyeTendons(eyePos, eyeSize, time, firingBeam != null ? 1f : DomainFade, player.whoAmI);
 				}
 
 				ModContent.GetInstance<DomainGrab>().Draw(time);
@@ -151,27 +158,38 @@ namespace SpectesGaze.Content.Systems
 
 			// Primitive strips need their own effect. Submit them between the two sprite batches.
 			FleshPrimitives.Flush(Main.instance.GraphicsDevice, view);
-			bool drawEye = tier >= 3 && (hasDomain || firingEye.HasValue);
-			if (!drawEye && !hasVisibleBolt && beamSparks.IsEmpty && lightAttackSparks.IsEmpty) return;
+			bool drawEye = tier >= 3 && (hasDomain || firingBeam != null);
+			bool drawFlight = hasFlightTrails || flightParticles.Count > 0;
+			if (!drawEye && !hasVisibleBolt && !hasRemoteBeamEye && !drawFlight && beamSparks.IsEmpty && lightAttackSparks.IsEmpty) return;
 
 			BeginSpriteBatch(batch, view);
 			try
 			{
+				if (drawFlight) DrawBloodFlight(worldView, time);
 				beamSparks.Draw(worldView);
 				lightAttackSparks.Draw(worldView);
-				if (hasVisibleBolt)
+				if (hasVisibleBolt || hasRemoteBeamEye)
 				{
 					for (int i = 0; i < Main.maxProjectiles; i++)
 					{
 						Projectile projectile = Main.projectile[i];
-						if (projectile.active && projectile.type == boltType && worldView.Intersects(projectile.Hitbox))
+						if (!projectile.active) continue;
+						if (projectile.type == boltType && worldView.Intersects(projectile.Hitbox))
 							DrawBolt(projectile);
+						else if (projectile.type == beamType && projectile.owner != Main.myPlayer
+							&& worldView.Contains(projectile.Center.ToPoint()))
+						{
+							int ownerTier = GhosteyePlayer.CalculateTier();
+							DrawEye(batch, projectile.Center, ownerTier, time, 1f, 0f, projectile.owner,
+								GhostBeam.GetFiringEye(projectile, ownerTier));
+						}
 					}
 				}
 				if (drawEye)
 				{
-					Vector2 eyePos = firingEye ?? player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
-					DrawEye(batch, eyePos, tier, time, firingEye.HasValue ? 1f : DomainFade, overlap, player.whoAmI);
+					Vector2 eyePos = firingBeam?.Center ?? player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
+					GhostBeam.FiringEye? shot = firingBeam == null ? null : GhostBeam.GetFiringEye(firingBeam, tier);
+					DrawEye(batch, eyePos, tier, time, shot.HasValue ? 1f : DomainFade, overlap, player.whoAmI, shot);
 				}
 			}
 			finally
@@ -304,9 +322,8 @@ namespace SpectesGaze.Content.Systems
 			return texture;
 		}
 
-		private static void QueueEyeTendons(Vector2 center, int tier, float time, float fade, int playerId)
+		private static void QueueEyeTendons(Vector2 center, float eyeSize, float time, float fade, int playerId)
 		{
-			float eyeSize = EyeSize(tier, time);
 			uint playerSeed = unchecked((uint)playerId * 14179u + 115u);
 			for (uint i = 1; i <= 6; i++)
 			{
@@ -330,7 +347,8 @@ namespace SpectesGaze.Content.Systems
 
 		private static float EyeSize(int tier, float time) => 44f + tier * 3f + Perlin(time * 2f, 0.67f, 43u) * 6f;
 
-		private static void DrawEye(SpriteBatch batch, Vector2 center, int tier, float time, float fade, float overlap, int playerId)
+		private static void DrawEye(SpriteBatch batch, Vector2 center, int tier, float time, float fade, float overlap, int playerId,
+			GhostBeam.FiringEye? firingEye)
 		{
 			float eyeSize = EyeSize(tier, time);
 			Vector2 eyePos = center - Main.screenPosition;
@@ -352,6 +370,18 @@ namespace SpectesGaze.Content.Systems
 					ProceduralGhosteye.Draw(batch, eyePos + offset, new Vector2(eyeSize * scale), tier,
 						time * drift + i * 0.21f, new Color(199, 104, 132) * opacity, rotation, unchecked((int)seed));
 				}
+			}
+
+			if (firingEye is GhostBeam.FiringEye shot)
+			{
+				ProceduralGhosteye.Draw(batch, eyePos, new Vector2(shot.Size), tier, time, Color.White * fade,
+					shot.Rotation, unchecked((int)eyeSeed), shot.PupilOffset, shot.Opening);
+				Vector2 muzzle = center + shot.PupilOffset;
+				float flare = MathHelper.Clamp((shot.Opening - 1f) / 0.56f, 0f, 1f);
+				DrawGlow(muzzle, new Vector2(40f, 25f), Light(Crimson, flare * 0.75f), shot.Aim.ToRotation());
+				DrawSoftLine(muzzle, muzzle + shot.Aim * (shot.Size * 0.35f), 11f, Light(Ember, flare * 0.68f));
+				DrawGlow(muzzle, new Vector2(19f, 11f), Light(Pale, flare * 0.88f), shot.Aim.ToRotation());
+				return;
 			}
 
 			float twitch = Perlin(time * 4.5f, 0.46f, eyeSeed) * 0.24f;
@@ -414,8 +444,9 @@ namespace SpectesGaze.Content.Systems
 
 		private static void DrawBeam(Projectile projectile, float time, Rectangle view)
 		{
-			Vector2 start = projectile.Center;
-			Vector2 aim = projectile.velocity.SafeNormalize(Vector2.UnitX);
+			GhostBeam.FiringEye shot = GhostBeam.GetFiringEye(projectile, GhosteyePlayer.CalculateTier());
+			Vector2 start = projectile.Center + shot.PupilOffset;
+			Vector2 aim = shot.Aim;
 			Vector2 end = start + aim * GhostBeam.MaxLength;
 			if (!Visible(start, end, view)) return;
 

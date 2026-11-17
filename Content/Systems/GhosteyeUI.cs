@@ -222,6 +222,7 @@ namespace SpectesGaze.Content.Systems
 
 		private static string DomainStatus(GhosteyePlayer eye, bool mastered)
 		{
+			if (eye.BloodFlightActive && eye.DomainOn) return Text("BloodFlightActive");
 			if (eye.DomainOn) return Text(mastered ? "DomainAwakened" : "DomainOpen");
 			return eye.DomainCooldown > 0 && !mastered ? Text("DomainLock", Seconds(eye.DomainCooldown)) : Text("DomainClosed");
 		}

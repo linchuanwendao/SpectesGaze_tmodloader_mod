@@ -21,6 +21,7 @@ namespace SpectesGaze.Content.Systems
 			new("Domain", 1, () => SpectesGaze.GazeKey),
 			new("Teleport", 1, InDomain: true),
 			new("Grab", 1, () => SpectesGaze.GrabKey, InDomain: true, SoloOnly: true),
+			new("BloodFlight", GhosteyePlayer.BloodFlightTier, () => SpectesGaze.BloodFlightKey, InDomain: true),
 			new("Sight", 3),
 			new("Flame", 4),
 			new("Bolt", 5, InDomain: true),
@@ -32,7 +33,7 @@ namespace SpectesGaze.Content.Systems
 			new("Awaken", GhosteyePlayer.AwakenedTier, InDomain: true)
 		];
 
-		private static Rectangle SkillRow(int index) => new(15, 91 + index * 29, 204, 26);
+		private static Rectangle SkillRow(int index) => new(15, 90 + index * 27, 204, 25);
 
 		private void DrawGuide(Canvas art, GhosteyePlayer eye, int tier, Point mouse)
 		{
@@ -133,6 +134,7 @@ namespace SpectesGaze.Content.Systems
 			if (skill.SoloOnly && Main.netMode != NetmodeID.SinglePlayer) return Text("Solo");
 			if (skill.Id == "Domain") return DomainStatus(eye, tier >= GhosteyePlayer.AwakenedTier);
 			if (skill.InDomain && !eye.DomainOn) return Text("NeedsDomain");
+			if (skill.Id == "BloodFlight" && eye.BloodFlightActive) return Text("BloodFlightActive");
 			if (skill.Id == "Rewind" && ModContent.GetInstance<DomainRewind>().IsRewinding) return Text("Rewinding");
 			if (skill.Id == "Overlap" && eye.OverlapTime > 0) return $"×{eye.AttackHitCount(tier)} · {Seconds(eye.OverlapTime)}s";
 

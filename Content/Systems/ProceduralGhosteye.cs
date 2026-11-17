@@ -39,7 +39,7 @@ namespace SpectesGaze.Content.Systems
 		}
 
 		internal static void Draw(SpriteBatch batch, Vector2 center, Vector2 size, int tier, float time, Color tint,
-			float rotation = 0f, int seed = 0)
+			float rotation = 0f, int seed = 0, Vector2? focusedPupil = null, float opening = 1f)
 		{
 			if (Main.dedServ || tint.A == 0 || size.X <= 0f || size.Y <= 0f) return;
 			EnsureTextures();
@@ -50,10 +50,10 @@ namespace SpectesGaze.Content.Systems
 			int frame = (tick / 5) % Frames;
 			if (frame < 0) frame += Frames;
 
-			EyePose pose = GetPose(tick, key);
-			Vector2 eyeSize = new(size.X, size.Y * (1f - 0.48f * pose.Blink));
-			Vector2 pupilCenter = center + (pose.Gaze * eyeSize).RotatedBy(rotation);
-			Vector2 pupilSize = eyeSize * new Vector2(0.54f, 0.47f);
+			EyePose pose = focusedPupil.HasValue ? default : GetPose(tick, key);
+			Vector2 eyeSize = new(size.X, size.Y * opening * (1f - 0.48f * pose.Blink));
+			Vector2 pupilCenter = center + (focusedPupil ?? (pose.Gaze * eyeSize).RotatedBy(rotation));
+			Vector2 pupilSize = new(eyeSize.X * 0.54f, eyeSize.Y * (focusedPupil.HasValue ? 0.38f : 0.47f));
 			Rectangle anatomyFrame = new(frame * AnatomySize, variant * AnatomySize, AnatomySize, AnatomySize);
 			Rectangle irisFrame = new(frame * IrisSize, variant * IrisSize, IrisSize, IrisSize);
 

@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;
@@ -21,6 +22,19 @@ namespace SpectesGaze.Content.Projectiles
 		/// <summary>持续帧数。90 帧 = 1.5 秒。</summary>
 		public const int Duration = 90;
 		private Vector2 lastSyncedAim;
+
+		internal readonly record struct FiringEye(Vector2 Aim, float Size, float Opening, float Rotation, Vector2 PupilOffset);
+
+		internal static FiringEye GetFiringEye(Projectile beam, int tier)
+		{
+			float age = beam.ai[1];
+			float tension = MathHelper.SmoothStep(0f, 1f, Math.Min((age + 1f) / 5f, (Duration - age + 1f) / 9f));
+			Vector2 aim = beam.velocity.SafeNormalize(Vector2.UnitX);
+			float size = (44f + tier * 3f) * (1f + tension * 0.16f);
+			float opening = 1f + tension * (0.62f + 0.04f * MathF.Sin(age * 0.44f));
+			float reach = MathHelper.Lerp(0.12f, 0.19f, MathF.Abs(aim.X));
+			return new FiringEye(aim, size, opening, aim.X * aim.Y * 0.30f, aim * (reach * size));
+		}
 
 		public override string Texture => "SpectesGaze/Content/Projectiles/GhostBeam";
 
@@ -64,12 +78,12 @@ namespace SpectesGaze.Content.Projectiles
 			}
 
 			GhosteyePlayer eye = player.GetModPlayer<GhosteyePlayer>();
-			Vector2 start = eye.FloatingEyeCenter;
+			Vector2 eyeCenter = eye.FloatingEyeCenter;
 
 			bool ownsBeam = Projectile.owner == Main.myPlayer;
 			if (ownsBeam)
 			{
-				Projectile.velocity = (Main.MouseWorld - start).SafeNormalize(Vector2.UnitX);
+				Projectile.velocity = (Main.MouseWorld - eyeCenter).SafeNormalize(Projectile.velocity.SafeNormalize(Vector2.UnitX));
 				if (Main.netMode == NetmodeID.MultiplayerClient && (int)Projectile.ai[1] % 6 == 0
 					&& Vector2.Dot(Projectile.velocity, lastSyncedAim) < 0.9998f)
 				{
@@ -78,9 +92,10 @@ namespace SpectesGaze.Content.Projectiles
 				}
 			}
 
-			Vector2 aim = Projectile.velocity.SafeNormalize(Vector2.UnitX);
-
-			Projectile.Center = start;
+			FiringEye firingEye = GetFiringEye(Projectile, GhosteyePlayer.CalculateTier());
+			Vector2 aim = firingEye.Aim;
+			Vector2 start = eyeCenter + firingEye.PupilOffset;
+			Projectile.Center = eyeCenter;
 			Projectile.rotation = aim.ToRotation();
 			Projectile.ai[0] = MaxLength;
 

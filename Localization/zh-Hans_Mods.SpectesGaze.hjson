@@ -47,6 +47,7 @@ Buffs: {
 Keybinds: {
 	OpenDomain.DisplayName: 睁开鬼眼
 	FireBeam.DisplayName: 发射鬼眼激光
+	BloodFlight.DisplayName: 化虹
 	FreezeDomain.DisplayName: 静止鬼域
 	RestartSelf.DisplayName: 重启自身
 	RewindDomain.DisplayName: 大范围重启
@@ -73,6 +74,7 @@ GhosteyeUI: {
 	DomainOpen: 鬼域展开
 	DomainClosed: 鬼域关闭
 	DomainAwakened: 完全复苏
+	BloodFlightActive: 化虹中
 	DomainLock: 闭合 {0}s
 	OpenDomainWith: 展开鬼域 [{0}]
 	DomainDiameter: 直径 {0} 格
@@ -116,7 +118,7 @@ GhosteyeUI: {
 			Effect:
 				'''
 				开域后右键点击，将自己传送到鼠标指向的位置。
-				落点须在鬼域内，路线和落点都要避开实体方块。
+				可直接穿过方块，落点需在鬼域内且留有足够空间。
 				成功传送增加 3 点复苏值。十层免消耗。
 				'''
 		}
@@ -128,6 +130,15 @@ GhosteyeUI: {
 				一层可抓掉落物和小动物，四层可抓普通敌人。
 				八层可抓城镇居民。Boss 和已识别的部件无法抓取。
 				实体方块会阻挡拖动，目标会停在鬼域边界内。
+				'''
+		}
+		BloodFlight: {
+			Name: 化虹
+			Effect:
+				'''
+				开域后按键化为一道血色流光，持续飞向鼠标光标。
+				接近光标时减速悬停。再次按键或鬼域闭合便恢复人形。
+				化虹不额外消耗复苏值，鬼域仍会照常积累复苏值。
 				'''
 		}
 		Sight: {
@@ -160,7 +171,7 @@ GhosteyeUI: {
 			Name: 湮灭
 			Effect:
 				'''
-				开域后，悬浮鬼眼朝鼠标持续发射光束 1.5 秒。
+				开域后，悬浮鬼眼睁大并追踪鼠标，从瞳孔射出 1.5 秒光束。
 				冷却 20 秒，六层起缩短为 10 秒。
 				基础消耗为 8 点复苏值，超过五层后递减。
 				'''

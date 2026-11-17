@@ -4,6 +4,7 @@ using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
 using Terraria.GameInput;
+using Terraria.Graphics.CameraModifiers;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
@@ -117,9 +118,7 @@ namespace SpectesGaze.Content.Players
 			lastTier = CalculateTier();
 
 			// 首次佩戴强制扣掉当前血量的 80%，至少保留 1 点，避免装备即死。
-			int loss = (int)(Player.statLife * 0.8f);
-			Player.statLife = Math.Max(1, Player.statLife - loss);
-			Player.HealEffect(-loss, true);
+			PayLifeCost((int)(Player.statLife * 0.8f), canKill: false);
 
 			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.8f, Pitch = -0.6f }, Player.Center);
 
@@ -292,6 +291,9 @@ namespace SpectesGaze.Content.Players
 				}
 			}
 
+			if (SpectesGaze.BloodFlightKey?.JustPressed == true)
+				ToggleBloodFlight();
+
 			// 大激光：第五层起，鬼域开启状态下才能用。
 			if (SpectesGaze.BeamKey != null && SpectesGaze.BeamKey.JustPressed)
 			{
@@ -372,6 +374,7 @@ namespace SpectesGaze.Content.Players
 			StillCooldown = TierCooldown(60 * 30);
 			GainRevival(SkillCost(12f, 6));
 			GhosteyeEffects.Freeze(Player.Center, radius);
+			ShakeCamera(Vector2.UnitY, 2.4f, 8);
 
 			if (count > 0)
 			{
@@ -403,6 +406,7 @@ namespace SpectesGaze.Content.Players
 
 			SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.9f, Pitch = -0.5f }, Player.Center);
 			GhosteyeEffects.Restart(Player.Center);
+			ShakeCamera(-Vector2.UnitY, 3.4f, 10);
 		}
 
 		private void ClearDebuffs()
@@ -445,6 +449,7 @@ namespace SpectesGaze.Content.Players
 			RewindCooldown = TierCooldown(60 * 30);
 			GainRevival(SkillCost(25f, DomainRewind.RequiredTier));
 			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.75f, Pitch = -0.7f }, Player.Center);
+			ShakeCamera(Vector2.UnitX, 4.2f, 12);
 		}
 
 		/// <summary>
@@ -513,7 +518,7 @@ namespace SpectesGaze.Content.Players
 			Vector2 dir = (Main.MouseWorld - origin).SafeNormalize(Vector2.UnitX);
 			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(120f + tier * 20f);
 
-			Projectile.NewProjectile(
+			int beamIndex = Projectile.NewProjectile(
 				Player.GetSource_FromThis(),
 				origin,
 				dir,
@@ -526,6 +531,15 @@ namespace SpectesGaze.Content.Players
 			GainRevival(SkillCost(8f, 5));
 
 			SoundEngine.PlaySound(SoundID.Item72 with { Volume = 0.9f, Pitch = -0.2f }, origin);
+			if (beamIndex < Main.maxProjectiles) ShakeCamera(-dir, 4.8f, 12);
+		}
+
+		private void ShakeCamera(Vector2 direction, float strength, int frames)
+		{
+			if (Main.dedServ || Player.whoAmI != Main.myPlayer) return;
+			// 连续施法复用同一个镜头冲击，避免十层连放时震动叠加。
+			Main.instance.CameraModifiers.Add(new PunchCameraModifier(Player.Center, direction, strength, 14f, frames,
+				uniqueIdentity: "SpectesGaze.GhosteyeSkill"));
 		}
 
 		private void TryOpenDomain()
@@ -568,6 +582,7 @@ namespace SpectesGaze.Content.Players
 		private void CloseDomain(bool overflowed)
 		{
 			DomainOn = false;
+			SetBloodFlight(false);
 			OverlapTime = 0;
 			int tier = CalculateTier();
 			GhosteyeEffects.Close(Player.Center, DomainRadiusOf(tier), overflowed);
@@ -580,14 +595,25 @@ namespace SpectesGaze.Content.Players
 
 			Player.AddBuff(ModContent.BuffType<RevivalOverload>(), DomainCooldown);
 			Main.NewText(Language.GetTextValue("Mods.SpectesGaze.RevivalMessages.Overflow"), 200, 40, 40);
-			int loss = Math.Max(1, Player.statLifeMax2 / 5);
-			if (Player.statLife <= loss)
+			PayLifeCost(Math.Max(1, Player.statLifeMax2 / 5), canKill: true);
+		}
+
+		private void PayLifeCost(int amount, bool canKill)
+		{
+			if (amount <= 0 || Player.dead || Main.dedServ || Player.whoAmI != Main.myPlayer) return;
+
+			// 清掉受伤前积累的自然回生，避免刚支付代价就被那一轮回生抵消。
+			Player.lifeRegenTime = 0;
+			Player.lifeRegenCount = Math.Min(Player.lifeRegenCount, 0);
+			if (canKill && Player.statLife <= amount)
 			{
 				NetworkText reason = NetworkText.FromKey("Mods.SpectesGaze.RevivalMessages.Death", Player.name);
-				Player.KillMe(PlayerDeathReason.ByCustomReason(reason), loss, 0);
+				Player.KillMe(PlayerDeathReason.ByCustomReason(reason), amount, 0);
 				return;
 			}
 
+			int loss = Math.Min(amount, Player.statLife - 1);
+			if (loss <= 0) return;
 			Player.statLife -= loss;
 			CombatText.NewText(Player.Hitbox, CombatText.DamagedFriendly, loss);
 			if (Main.netMode == NetmodeID.MultiplayerClient)
@@ -605,15 +631,20 @@ namespace SpectesGaze.Content.Players
 
 			Vector2 checkPos = target - Player.Size / 2f;
 
-			// 落点不能卡在实体方块里。
+			// 可以跨过地形，角色的整个落点仍须在世界内且能站下。
+			if (!WorldGen.InWorld((int)(checkPos.X / 16f), (int)(checkPos.Y / 16f), 10)
+				|| !WorldGen.InWorld((int)((checkPos.X + Player.width) / 16f),
+					(int)((checkPos.Y + Player.height) / 16f), 10)) return;
 			if (Collision.SolidCollision(checkPos, Player.width, Player.height)) return;
 
-			// 视线要通，防止隔着墙瞬移。
-			if (!Collision.CanHitLine(Player.Center, 1, 1, target, 1, 1)) return;
-
 			Vector2 from = Player.Center;
-			Player.Teleport(checkPos, 1);
-			Player.velocity = Vector2.Zero;
+			Player.RemoveAllGrapplingHooks();
+			Player.velocity = bloodFlightVelocity = Vector2.Zero;
+			int style = TeleportationStyleID.RodOfDiscord;
+			Player.Teleport(checkPos, style);
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				NetMessage.SendData(MessageID.TeleportEntity, number2: Player.whoAmI,
+					number3: checkPos.X, number4: checkPos.Y, number5: style);
 			GainRevival(3f);
 			GhosteyeEffects.Teleport(from, Player.Center);
 		}
@@ -646,7 +677,12 @@ namespace SpectesGaze.Content.Players
 
 		// ================= 存档 =================
 
-		public override void OnEnterWorld() => Revival = Math.Clamp(Revival, 0f, RevivalLimitOf(CalculateTier()));
+		public override void OnEnterWorld()
+		{
+			BloodFlightActive = false;
+			bloodFlightVelocity = Vector2.Zero;
+			Revival = Math.Clamp(Revival, 0f, RevivalLimitOf(CalculateTier()));
+		}
 
 		public override void SaveData(TagCompound tag)
 		{

@@ -102,8 +102,8 @@ namespace SpectesGaze.Content.Items
 		public override void AddRecipes()
 		{
 			Recipe recipe = CreateRecipe();
-			recipe.AddIngredient(ItemID.Lens, 10);
-			recipe.AddRecipeGroup(GhosteyeRecipeGroups.EvilMaterials, 20);
+			recipe.AddIngredient(ItemID.Lens, 2);
+			recipe.AddRecipeGroup(GhosteyeRecipeGroups.EvilMaterials, 3);
 			recipe.AddTile(TileID.WorkBenches);
 			recipe.Register();
 		}

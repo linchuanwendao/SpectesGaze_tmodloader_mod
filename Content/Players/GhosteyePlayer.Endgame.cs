@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -60,10 +61,12 @@ namespace SpectesGaze.Content.Players
 			float radius = DomainRadiusOf(CalculateTier());
 			GhosteyeEffects.Overlap(Player.Center, radius);
 			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.85f, Pitch = -0.8f }, Player.Center);
+			ShakeCamera(new Vector2(0.6f, -0.8f), 5.0f, 13);
 		}
 
 		public override void UpdateDead()
 		{
+			SetBloodFlight(false);
 			DomainOn = false;
 			OverlapTime = 0;
 			boltTimer = 0;
