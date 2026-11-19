@@ -25,7 +25,7 @@ namespace SpectesGaze
 		// 大范围重启。第八层起可用。
 		public static ModKeybind RewindKey { get; private set; }
 
-		// 鬼域叠加。第九层起可用。
+		// 九层起手动叠加，十层取消时限。
 		public static ModKeybind OverlapKey { get; private set; }
 
 		public static ModKeybind GrabKey { get; private set; }
@@ -59,11 +59,26 @@ namespace SpectesGaze
 		}
 
 		private const byte BloodFlightPacket = 1;
+		private const byte AwakenedDomainPacket = 2;
+		private const byte TimedOverlapPacket = 3;
+		private const byte PermanentOverlapPacket = 4;
 
-		internal void SendBloodFlight(int player, bool active, int toWho = -1, int ignoreWho = -1)
+		internal void SendBloodFlight(int player, bool active, int toWho = -1, int ignoreWho = -1) =>
+			SendPlayerToggle(BloodFlightPacket, player, active, toWho, ignoreWho);
+
+		internal void SendAwakenedDomain(int player, bool active, int toWho = -1, int ignoreWho = -1) =>
+			SendPlayerToggle(AwakenedDomainPacket, player, active, toWho, ignoreWho);
+
+		internal void SendTimedOverlap(int player, bool active, int toWho = -1, int ignoreWho = -1) =>
+			SendPlayerToggle(TimedOverlapPacket, player, active, toWho, ignoreWho);
+
+		internal void SendPermanentOverlap(int player, bool active, int toWho = -1, int ignoreWho = -1) =>
+			SendPlayerToggle(PermanentOverlapPacket, player, active, toWho, ignoreWho);
+
+		private void SendPlayerToggle(byte kind, int player, bool active, int toWho, int ignoreWho)
 		{
 			ModPacket packet = GetPacket();
-			packet.Write(BloodFlightPacket);
+			packet.Write(kind);
 			packet.Write((byte)player);
 			packet.Write(active);
 			packet.Send(toWho, ignoreWho);
@@ -71,7 +86,8 @@ namespace SpectesGaze
 
 		public override void HandlePacket(BinaryReader reader, int whoAmI)
 		{
-			if (reader.ReadByte() != BloodFlightPacket) return;
+			byte kind = reader.ReadByte();
+			if (kind is not (BloodFlightPacket or AwakenedDomainPacket or TimedOverlapPacket or PermanentOverlapPacket)) return;
 			int playerIndex = reader.ReadByte();
 			bool active = reader.ReadBoolean();
 			bool server = Main.netMode == NetmodeID.Server;
@@ -79,10 +95,24 @@ namespace SpectesGaze
 				|| (!server && playerIndex == Main.myPlayer)) return;
 
 			Player player = Main.player[playerIndex];
-			// 始终用原版玩家移动同步。这里的状态只负责其他客户端的化虹演出。
-			if (active && (player.dead || GhosteyePlayer.CalculateTier() < GhosteyePlayer.BloodFlightTier)) return;
-			player.GetModPlayer<GhosteyePlayer>().SetBloodFlightVisual(active);
-			if (server) SendBloodFlight(playerIndex, active, ignoreWho: whoAmI);
+			int tier = GhosteyePlayer.CalculateTier();
+			bool tierAllowed = kind switch
+			{
+				BloodFlightPacket => tier >= GhosteyePlayer.BloodFlightTier,
+				AwakenedDomainPacket or PermanentOverlapPacket => tier >= GhosteyePlayer.AwakenedTier,
+				_ => tier == GhosteyePlayer.OverlapTier
+			};
+			if (active && (!player.active || player.dead || !tierAllowed)) return;
+			GhosteyePlayer eye = player.GetModPlayer<GhosteyePlayer>();
+			if (kind == BloodFlightPacket)
+				eye.SetBloodFlightVisual(active);
+			else if (kind == AwakenedDomainPacket)
+				eye.ReceiveAwakenedDomain(active);
+			else if (kind == TimedOverlapPacket)
+				eye.ReceiveTimedOverlap(active);
+			else
+				eye.ReceivePermanentOverlap(active);
+			if (server) SendPlayerToggle(kind, playerIndex, active, -1, whoAmI);
 		}
 	}
 }

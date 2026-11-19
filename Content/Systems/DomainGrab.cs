@@ -29,7 +29,7 @@ namespace SpectesGaze.Content.Systems
 		internal void HandleInput(Player player, bool domainOn)
 		{
 			ModKeybind key = SpectesGaze.GrabKey;
-			if (key?.Current != true || !domainOn || player.dead || player.mouseInterface)
+			if (!domainOn || player.dead || player.mouseInterface || key?.Current != true)
 			{
 				held = null;
 				return;

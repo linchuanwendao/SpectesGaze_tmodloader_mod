@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Terraria;
 using SpectesGaze.Content.Players;
@@ -9,12 +8,11 @@ namespace SpectesGaze.Content.Systems
 	public partial class DomainRenderer
 	{
 		private const int FlightTrailLength = 17;
-		private const int MaxFlightParticles = 420;
 		private static readonly Color FlightShadow = new(13, 3, 12);
 		private static readonly Color FlightBlood = new(145, 8, 35);
 		private static readonly Color FlightFlare = new(255, 94, 87);
 		private readonly FlightTrail[] flightTrails = new FlightTrail[Main.maxPlayers];
-		private readonly List<FlightParticle> flightParticles = new(MaxFlightParticles);
+		private readonly FleshParticles flightParticles = new(420);
 		private readonly Random flightRandom = new();
 		private bool hasFlightTrails;
 
@@ -24,36 +22,9 @@ namespace SpectesGaze.Content.Systems
 			public int Count;
 		}
 
-		private struct FlightParticle
-		{
-			public Vector2 Position;
-			public Vector2 Velocity;
-			public float Size;
-			public float Rotation;
-			public float Spin;
-			public Color Color;
-			public int Variant;
-			public int Age;
-			public int Lifetime;
-		}
-
 		private void UpdateBloodFlightEffects()
 		{
-			for (int i = flightParticles.Count - 1; i >= 0; i--)
-			{
-				FlightParticle particle = flightParticles[i];
-				if (++particle.Age >= particle.Lifetime)
-				{
-					flightParticles[i] = flightParticles[^1];
-					flightParticles.RemoveAt(flightParticles.Count - 1);
-					continue;
-				}
-
-				particle.Position += particle.Velocity;
-				particle.Velocity *= 0.95f;
-				particle.Rotation += particle.Spin;
-				flightParticles[i] = particle;
-			}
+			flightParticles.Update();
 
 			hasFlightTrails = false;
 			for (int i = 0; i < Main.maxPlayers; i++)
@@ -96,7 +67,7 @@ namespace SpectesGaze.Content.Systems
 		{
 			Vector2 normal = new(-heading.Y, heading.X);
 			float speed = Vector2.Distance(from, to);
-			for (int i = 0; i < count && flightParticles.Count < MaxFlightParticles; i++)
+			for (int i = 0; i < count && !flightParticles.IsFull; i++)
 			{
 				bool dark = i % 2 == 0;
 				float side = FlightRange(-1f, 1f);
@@ -104,18 +75,12 @@ namespace SpectesGaze.Content.Systems
 					+ normal * (side * FlightRange(6f, 20f)) - heading * FlightRange(0f, 15f);
 				Vector2 velocity = heading * FlightRange(-5.6f - speed * 0.14f, -0.8f) + normal * (side * FlightRange(0.7f, 4.7f));
 				if (burst) velocity = FlightRange(-MathHelper.Pi, MathHelper.Pi).ToRotationVector2() * FlightRange(1.5f, 8.5f);
-				flightParticles.Add(new FlightParticle
-				{
-					Position = position,
-					Velocity = velocity,
-					Size = dark ? FlightRange(17f, 44f) : FlightRange(9f, 27f),
-					Rotation = velocity.ToRotation(),
-					Spin = FlightRange(-0.18f, 0.18f),
-					Color = dark ? Color.Lerp(FlightShadow, Shadow, flightRandom.NextSingle())
-						: Color.Lerp(FlightBlood, FlightFlare, FlightRange(0.2f, 1f)),
-					Variant = flightRandom.Next(8),
-					Lifetime = flightRandom.Next(16, dark ? 39 : 32)
-				});
+				float size = dark ? FlightRange(17f, 44f) : FlightRange(9f, 27f);
+				float spin = FlightRange(-0.18f, 0.18f);
+				Color tint = dark ? Color.Lerp(FlightShadow, Shadow, flightRandom.NextSingle())
+					: Color.Lerp(FlightBlood, FlightFlare, FlightRange(0.2f, 1f));
+				flightParticles.Spawn(position, velocity, size, spin, tint, flightRandom.Next(8),
+					flightRandom.Next(16, dark ? 39 : 32));
 			}
 		}
 
@@ -123,14 +88,7 @@ namespace SpectesGaze.Content.Systems
 
 		private void DrawBloodFlight(Rectangle view, float time)
 		{
-			foreach (FlightParticle particle in flightParticles)
-			{
-				if (!view.Contains(particle.Position.ToPoint())) continue;
-				float life = particle.Age / (float)particle.Lifetime;
-				float fade = (1f - life) * (1f - life);
-				Vector2 size = new Vector2(particle.Size * (1.75f - life * 0.67f), particle.Size * (0.54f + life * 0.26f));
-				GhosteyeEffects.DrawFlesh(particle.Position, size, particle.Color * (fade * 0.88f), particle.Rotation, particle.Variant);
-			}
+			flightParticles.Draw(view);
 
 			for (int i = 0; i < flightTrails.Length; i++)
 			{
@@ -164,7 +122,7 @@ namespace SpectesGaze.Content.Systems
 			}
 
 			Vector2 center = trail.Points[0];
-			if (!view.Contains(center.ToPoint())) return;
+			if (!view.Contains(center.ToPoint()) || player.GetModPlayer<GhosteyePlayer>().OverlapActive) return;
 			Vector2 motion = center - trail.Points[Math.Min(2, trail.Count - 1)];
 			float stretch = Math.Min(motion.Length() * 0.64f, 25f);
 			float angle = motion.SafeNormalize(Vector2.UnitX * player.direction).ToRotation();

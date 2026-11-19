@@ -8,24 +8,26 @@ namespace SpectesGaze.Content.Systems
 	public partial class DomainRenderer
 	{
 		private static readonly Color BeamSpark = new(255, 143, 96);
+		private static readonly Color BeamSoot = new(11, 2, 10);
 		private static readonly Color BoltSpark = new(230, 64, 91);
 		private readonly Random attackSparkRandom = new();
-		private readonly SparkParticles beamSparks = new(208);
+		private readonly SparkParticles beamSparks = new(320);
+		private readonly FleshParticles beamFragments = new(360);
 		private readonly SparkParticles lightAttackSparks = new(80);
 		private int beamImpactBursts;
 		private int weaponSparkCooldown;
 
 		internal void EmitBeamSparks(Vector2 start, Vector2 aim, int age)
 		{
-			if (beamSparks.IsFull || age >= GhostBeam.Duration - 6 || age % 2 == 0) return;
+			if (age >= GhostBeam.Duration - 6 || age % 2 == 0 || (beamSparks.IsFull && beamFragments.IsFull)) return;
 
 			float fade = MathHelper.Clamp((GhostBeam.Duration - age) / 15f, 0f, 1f);
 			if (GhosteyeEffects.NearScreen(start))
 			{
-				if (age == 1) EmitAttackFan(beamSparks, start, aim, 18, 1.55f, BeamSpark);
+				if (age == 1) EmitAttackFan(beamSparks, start, aim, 26, 1.55f, BeamSpark);
 				if (age % 4 == 1)
 				{
-					for (int i = 0; i < 3; i++)
+					for (int i = 0; i < 5; i++)
 					{
 						Vector2 heading = aim.RotatedBy(AttackRange(-0.68f, 0.68f));
 						beamSparks.Spawn(start + heading * AttackRange(6f, 22f), heading * AttackRange(5f, 12f),
@@ -36,16 +38,23 @@ namespace SpectesGaze.Content.Systems
 
 			// Sample the entire beam so sparks still cover the visible section when the muzzle is off screen.
 			Vector2 normal = new(-aim.Y, aim.X);
-			int count = age <= 7 ? 12 : 5;
-			for (int i = 0; i < count && !beamSparks.IsFull; i++)
+			int count = age <= 7 ? 21 : 13;
+			for (int i = 0; i < count; i++)
 			{
-				float along = 0.025f + (i + attackSparkRandom.NextSingle()) / count * 0.955f;
+				float along = (i + attackSparkRandom.NextSingle()) / count;
 				float side = attackSparkRandom.Next(2) == 0 ? -1f : 1f;
 				float taper = Math.Min(1f, (1f - along) * 8f);
-				float offset = GhostBeam.Thickness * AttackRange(0.18f, 0.58f) * taper;
+				float offset = GhostBeam.Thickness * AttackRange(0.22f, 0.58f) * taper;
 				Vector2 point = start + aim * (GhostBeam.MaxLength * along) + normal * (side * offset);
 				if (!GhosteyeEffects.NearScreen(point)) continue;
 
+				Color soot = Color.Lerp(BeamSoot, Shadow, AttackRange(0f, 0.60f));
+				Vector2 drift = aim * AttackRange(2f, 7.6f) + normal * (side * AttackRange(1.5f, 5.2f));
+				float size = AttackRange(18f, 52f) * (0.42f + taper * 0.58f);
+				beamFragments.Spawn(point, drift, size, AttackRange(-0.13f, 0.13f), soot, attackSparkRandom.Next(8),
+					attackSparkRandom.Next(19, 36), fade);
+
+				if (i % 3 == 0 && age > 7) continue;
 				Vector2 velocity = aim * AttackRange(3.4f, 10.4f) + normal * (side * AttackRange(1.3f, 5.3f));
 				Color tint = Color.Lerp(Crimson, BeamSpark, AttackRange(0.26f, 0.92f));
 				beamSparks.Spawn(point, velocity, tint, AttackRange(1.5f, 4f), fade * AttackRange(0.66f, 0.96f),

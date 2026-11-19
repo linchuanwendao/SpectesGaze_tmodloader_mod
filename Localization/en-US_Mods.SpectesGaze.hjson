@@ -106,7 +106,7 @@ GhosteyeUI: {
 			Name: Open Domain
 			Effect:
 				'''
-				Opening inflicts Ghastly Gaze for 5 seconds on enemies in range.
+				Lights the domain. Opening inflicts Ghastly Gaze for 5s on nearby enemies.
 				Gain 20% movement speed, 15% damage, 8% crit and knockback immunity.
 				Hits may slow (5%, 3s). Revival raises damage dealt and taken.
 				Below tier 10, gain 1.5 Revival/s. Cap starts at 100 and rises by 10 per tier.
@@ -145,7 +145,6 @@ GhosteyeUI: {
 			Name: Spirit Sight
 			Effect:
 				'''
-				See creatures through terrain while bound to the Ghosteye.
 				The floating eye appears overhead when the domain opens.
 				'''
 		}
@@ -162,8 +161,8 @@ GhosteyeUI: {
 			Name: Ghosteye Bolt
 			Effect:
 				'''
-				The eye checks for the nearest enemy in range every 0.75 seconds.
-				While the domain is open, it fires a lightly homing bolt.
+				At tiers 5–8, the eye seeks the nearest enemy and fires a homing bolt every 0.75 seconds.
+				At tier 9 and higher, it fires straight toward the cursor while you attack with a weapon.
 				The bolt costs no Revival.
 				'''
 		}
@@ -207,9 +206,9 @@ GhosteyeUI: {
 			Name: Domain Overlap
 			Effect:
 				'''
-				Overlap an open domain for 3 seconds.
-				Each successful hit adds 8 echoes, for 9 total hits at tier 9.
-				Tier 10 reaches 18 hits. Tier 9 has a 60-second cooldown.
+				Overlap turns you into a red-black orb and increases damage dealt to enemies on hit by 1,500%.
+				At tier 9, activate it for 3 seconds with a 60-second cooldown. Press again to end it early.
+				At tier 10, toggle overlap with the key. It lasts until toggled off or the domain closes.
 				'''
 		}
 		Awaken: {
@@ -218,8 +217,8 @@ GhosteyeUI: {
 				'''
 				Tier 10 removes Revival costs and Ghosteye skill cooldowns.
 				An open domain grants damage immunity and 10x item use speed.
-				Hits count tenfold, or eighteenfold during Domain Overlap.
 				A lethal strike restores life and mana and removes debuffs in place.
+				Surviving the Siren Musical Box's forced death also lifts its curse.
 				'''
 		}
 	}

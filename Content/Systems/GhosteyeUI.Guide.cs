@@ -22,7 +22,7 @@ namespace SpectesGaze.Content.Systems
 			new("Teleport", 1, InDomain: true),
 			new("Grab", 1, () => SpectesGaze.GrabKey, InDomain: true, SoloOnly: true),
 			new("BloodFlight", GhosteyePlayer.BloodFlightTier, () => SpectesGaze.BloodFlightKey, InDomain: true),
-			new("Sight", 3),
+			new("Sight", GhosteyePlayer.FloatingEyeTier, InDomain: true),
 			new("Flame", 4),
 			new("Bolt", 5, InDomain: true),
 			new("Beam", 5, () => SpectesGaze.BeamKey, InDomain: true),
@@ -136,7 +136,7 @@ namespace SpectesGaze.Content.Systems
 			if (skill.InDomain && !eye.DomainOn) return Text("NeedsDomain");
 			if (skill.Id == "BloodFlight" && eye.BloodFlightActive) return Text("BloodFlightActive");
 			if (skill.Id == "Rewind" && ModContent.GetInstance<DomainRewind>().IsRewinding) return Text("Rewinding");
-			if (skill.Id == "Overlap" && eye.OverlapTime > 0) return $"×{eye.AttackHitCount(tier)} · {Seconds(eye.OverlapTime)}s";
+			if (skill.Id == "Overlap" && OverlapStatus(eye, tier) is { } overlap) return overlap;
 
 			int cooldown = skill.Id switch
 			{

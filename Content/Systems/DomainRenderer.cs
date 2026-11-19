@@ -43,6 +43,8 @@ namespace SpectesGaze.Content.Systems
 				stain = null;
 				softLineMask?.Dispose();
 				softLineMask = null;
+				overlapCoreMask?.Dispose();
+				overlapCoreMask = null;
 				DomainBloodBackdrop.Unload();
 				FleshPrimitives.Unload();
 			});
@@ -53,10 +55,15 @@ namespace SpectesGaze.Content.Systems
 			domainAge = 0;
 			edgeSparks.Clear();
 			beamSparks.Clear();
+			beamFragments.Clear();
 			lightAttackSparks.Clear();
 			Array.Clear(flightTrails);
 			flightParticles.Clear();
 			hasFlightTrails = false;
+			Array.Clear(overlapAge);
+			overlapAsh.Clear();
+			overlapSparks.Clear();
+			hasOverlapForms = false;
 			beamImpactBursts = 0;
 			weaponSparkCooldown = 0;
 		}
@@ -67,8 +74,10 @@ namespace SpectesGaze.Content.Systems
 
 			edgeSparks.Update();
 			beamSparks.Update();
+			beamFragments.Update();
 			lightAttackSparks.Update();
 			UpdateBloodFlightEffects();
+			UpdateOverlapEffects();
 			beamImpactBursts = 0;
 			if (weaponSparkCooldown > 0) weaponSparkCooldown--;
 			Player player = Main.LocalPlayer;
@@ -82,7 +91,7 @@ namespace SpectesGaze.Content.Systems
 			EmitEdgeSparks(player, Main.GlobalTimeWrappedHourly);
 		}
 
-		private static bool HasDomain(Player player)
+		internal static bool HasDomain(Player player)
 		{
 			if (player == null || !player.active || player.dead) return false;
 			GhosteyePlayer eye = player.GetModPlayer<GhosteyePlayer>();
@@ -102,7 +111,7 @@ namespace SpectesGaze.Content.Systems
 			Rectangle worldView = new((int)Main.screenPosition.X, (int)Main.screenPosition.Y, Main.screenWidth, Main.screenHeight);
 			worldView.Inflate(192, 192);
 			float time = Main.GlobalTimeWrappedHourly;
-			float overlap = hasDomain ? OverlapOpacity(player.GetModPlayer<GhosteyePlayer>().OverlapTime) : 0f;
+			float overlap = hasDomain ? OverlapOpacity(player) : 0f;
 			Projectile firingBeam = null;
 			bool hasVisibleBolt = false;
 			bool hasRemoteBeamEye = false;
@@ -138,7 +147,7 @@ namespace SpectesGaze.Content.Systems
 				}
 
 				if (firingBeam != null && tier == 0) tier = GhosteyePlayer.CalculateTier();
-				if (tier >= 3 && (hasDomain || firingBeam != null))
+				if (tier >= GhosteyePlayer.FloatingEyeTier && (hasDomain || firingBeam != null))
 				{
 					Vector2 eyePos = firingBeam?.Center ?? player.GetModPlayer<GhosteyePlayer>().FloatingEyeCenter;
 					float eyeSize = firingBeam == null ? EyeSize(tier, time) : GhostBeam.GetFiringEye(firingBeam, tier).Size;
@@ -158,14 +167,18 @@ namespace SpectesGaze.Content.Systems
 
 			// Primitive strips need their own effect. Submit them between the two sprite batches.
 			FleshPrimitives.Flush(Main.instance.GraphicsDevice, view);
-			bool drawEye = tier >= 3 && (hasDomain || firingBeam != null);
-			bool drawFlight = hasFlightTrails || flightParticles.Count > 0;
-			if (!drawEye && !hasVisibleBolt && !hasRemoteBeamEye && !drawFlight && beamSparks.IsEmpty && lightAttackSparks.IsEmpty) return;
+			bool drawEye = tier >= GhosteyePlayer.FloatingEyeTier && (hasDomain || firingBeam != null);
+			bool drawFlight = hasFlightTrails || !flightParticles.IsEmpty;
+			bool drawOverlap = hasOverlapForms || !overlapAsh.IsEmpty || !overlapSparks.IsEmpty;
+			if (!drawEye && !hasVisibleBolt && !hasRemoteBeamEye && !drawFlight && !drawOverlap
+				&& beamSparks.IsEmpty && beamFragments.IsEmpty && lightAttackSparks.IsEmpty) return;
 
 			BeginSpriteBatch(batch, view);
 			try
 			{
 				if (drawFlight) DrawBloodFlight(worldView, time);
+				if (drawOverlap) DrawOverlapEffects(worldView, time);
+				beamFragments.Draw(worldView);
 				beamSparks.Draw(worldView);
 				lightAttackSparks.Draw(worldView);
 				if (hasVisibleBolt || hasRemoteBeamEye)
@@ -202,10 +215,12 @@ namespace SpectesGaze.Content.Systems
 			batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
 				DepthStencilState.None, Main.Rasterizer, null, view);
 
-		private static float OverlapOpacity(int time)
+		private float OverlapOpacity(Player player)
 		{
-			if (time <= 0) return 0f;
-			float edge = Math.Min((GhosteyePlayer.OverlapDuration - time + 1) / 12f, time / 24f);
+			GhosteyePlayer eye = player.GetModPlayer<GhosteyePlayer>();
+			if (!eye.OverlapActive) return 0f;
+			float edge = (overlapAge[player.whoAmI] + 1) / 12f;
+			if (!eye.FullyAwakened) edge = Math.Min(edge, eye.OverlapTime / 24f);
 			return MathHelper.SmoothStep(0f, 1f, edge);
 		}
 
@@ -376,11 +391,7 @@ namespace SpectesGaze.Content.Systems
 			{
 				ProceduralGhosteye.Draw(batch, eyePos, new Vector2(shot.Size), tier, time, Color.White * fade,
 					shot.Rotation, unchecked((int)eyeSeed), shot.PupilOffset, shot.Opening);
-				Vector2 muzzle = center + shot.PupilOffset;
-				float flare = MathHelper.Clamp((shot.Opening - 1f) / 0.56f, 0f, 1f);
-				DrawGlow(muzzle, new Vector2(40f, 25f), Light(Crimson, flare * 0.75f), shot.Aim.ToRotation());
-				DrawSoftLine(muzzle, muzzle + shot.Aim * (shot.Size * 0.35f), 11f, Light(Ember, flare * 0.68f));
-				DrawGlow(muzzle, new Vector2(19f, 11f), Light(Pale, flare * 0.88f), shot.Aim.ToRotation());
+				DrawBeamMuzzle(center + shot.PupilOffset, shot, time, eyeSeed);
 				return;
 			}
 
@@ -450,17 +461,16 @@ namespace SpectesGaze.Content.Systems
 			Vector2 end = start + aim * GhostBeam.MaxLength;
 			if (!Visible(start, end, view)) return;
 
-			float age = projectile.ai[1];
-			float fade = MathHelper.Clamp(Math.Min(age / 4f, (GhostBeam.Duration - age) / 12f), 0f, 1f);
+			float fade = shot.BeamOpacity;
 			if (fade <= 0f) return;
 
 			uint seed = unchecked((uint)projectile.identity * 7187u + (uint)projectile.owner * 7927u + 872u);
 			Vector2 normal = new(-aim.Y, aim.X);
-			DrawGlow(start, new Vector2(86f, 69f), PaintCrimson * (fade * 0.76f), aim.ToRotation());
+			DrawGlow(start, new Vector2(115f, 87f), PaintCrimson * (fade * 0.73f), aim.ToRotation());
 			const int segments = 69;
 			float strokeStart = Unit(seed + 653u);
-			FleshPrimitives.Section lastTissue = new(start, normal, 12f, 16f, PaintShadow * fade, PaintBlood * fade, strokeStart);
-			FleshPrimitives.Section lastCut = new(start, normal, 3f, 7f, PaintBlood * fade, PaintCrimson * fade, strokeStart + 0.37f);
+			FleshPrimitives.Section lastTissue = new(start, normal, 16f, 21f, PaintShadow * fade, PaintBlood * fade, strokeStart);
+			FleshPrimitives.Section lastCut = new(start, normal, 4.5f, 9f, PaintBlood * fade, PaintCrimson * fade, strokeStart + 0.37f);
 			for (int i = 1; i <= segments; i++)
 			{
 				uint branchSeed = seed + (uint)i * 3571u;

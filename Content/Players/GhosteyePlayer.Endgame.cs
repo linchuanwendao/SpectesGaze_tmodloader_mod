@@ -15,15 +15,32 @@ namespace SpectesGaze.Content.Players
 		internal const int OverlapTier = 9;
 		internal const int AwakenedTier = 10;
 		internal const int OverlapDuration = 60 * 3;
+		internal const int OverlapDamageMultiplier = 16;
 
 		internal int OverlapTime { get; private set; }
 		internal int OverlapCooldown { get; private set; }
-		internal bool FullyAwakened => Equipped && DomainOn && !Player.dead && CalculateTier() >= AwakenedTier;
-		private bool applyingEchoHits;
+		internal bool SirenCurseCleared { get; set; }
+		private bool permanentOverlap;
+		private bool remoteAwakenedDomain;
+		private bool sentAwakenedDomain;
+		private uint lastRebirthTick;
+
+		internal bool ProtectsFromDeath => CalculateTier() >= AwakenedTier
+			&& (Player.whoAmI == Main.myPlayer ? Equipped && DomainOn : remoteAwakenedDomain);
+		internal bool FullyAwakened => !Player.dead && ProtectsFromDeath;
+
+		internal bool OverlapActive => CalculateTier() switch
+		{
+			>= AwakenedTier => permanentOverlap && FullyAwakened,
+			OverlapTier => !Player.dead && OverlapTime > 0
+				&& (Player.whoAmI != Main.myPlayer || (Equipped && DomainOn)),
+			_ => false
+		};
 
 		private void UpdateEndgameState(int tier)
 		{
-			if (OverlapTime > 0) OverlapTime--;
+			if (Player.statLife <= 0 && ProtectsFromDeath) RestoreFromDeath();
+			SyncAwakenedDomain();
 			if (tier >= AwakenedTier)
 			{
 				Revival = 0f;
@@ -50,15 +67,32 @@ namespace SpectesGaze.Content.Players
 
 		private void TryOverlapDomain()
 		{
-			if (TierCooldown(OverlapCooldown) > 0)
+			int tier = CalculateTier();
+			if (!DomainOn || Player.dead || tier < OverlapTier) return;
+			if (OverlapActive)
 			{
-				Main.NewText($"鬼域叠加还在冷却，{(OverlapCooldown + 59) / 60} 秒。", 160, 60, 60);
+				StopOverlap();
 				return;
 			}
 
-			OverlapTime = OverlapDuration;
-			OverlapCooldown = TierCooldown(60 * 60);
-			float radius = DomainRadiusOf(CalculateTier());
+			if (tier >= AwakenedTier)
+			{
+				SetTimedOverlap(false);
+				SetPermanentOverlap(true);
+			}
+			else
+			{
+				if (OverlapCooldown > 0)
+				{
+					Main.NewText($"鬼域叠加还在冷却，{(OverlapCooldown + 59) / 60} 秒。", 160, 60, 60);
+					return;
+				}
+
+				SetTimedOverlap(true);
+				OverlapCooldown = 60 * 60;
+			}
+
+			float radius = DomainRadiusOf(tier);
 			GhosteyeEffects.Overlap(Player.Center, radius);
 			SoundEngine.PlaySound(SoundID.NPCDeath10 with { Volume = 0.85f, Pitch = -0.8f }, Player.Center);
 			ShakeCamera(new Vector2(0.6f, -0.8f), 5.0f, 13);
@@ -68,18 +102,41 @@ namespace SpectesGaze.Content.Players
 		{
 			SetBloodFlight(false);
 			DomainOn = false;
-			OverlapTime = 0;
+			remoteAwakenedDomain = false;
+			SyncAwakenedDomain();
+			StopOverlap();
 			boltTimer = 0;
 		}
 
-		public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone) =>
-			ApplyEchoHits(target, hit, damageDone);
-
-		internal int AttackHitCount(int tier)
+		private void StopOverlap()
 		{
-			int hits = tier >= AwakenedTier ? 10 : 1;
-			if (tier >= OverlapTier && OverlapTime > 0) hits += 8;
-			return hits;
+			SetTimedOverlap(false);
+			SetPermanentOverlap(false);
+		}
+
+		private void SetTimedOverlap(bool active)
+		{
+			if (active == (OverlapTime > 0)) return;
+			ReceiveTimedOverlap(active);
+			if (Main.netMode == NetmodeID.MultiplayerClient && Player.whoAmI == Main.myPlayer)
+				((SpectesGaze)Mod).SendTimedOverlap(Player.whoAmI, active);
+		}
+
+		internal void ReceiveTimedOverlap(bool active) => OverlapTime = active ? OverlapDuration : 0;
+
+		private void SetPermanentOverlap(bool active)
+		{
+			if (active == permanentOverlap) return;
+			ReceivePermanentOverlap(active);
+			if (Main.netMode == NetmodeID.MultiplayerClient && Player.whoAmI == Main.myPlayer)
+				((SpectesGaze)Mod).SendPermanentOverlap(Player.whoAmI, active);
+		}
+
+		internal void ReceivePermanentOverlap(bool active) => permanentOverlap = active;
+
+		public override void ModifyHitNPC(NPC target, ref NPC.HitModifiers modifiers)
+		{
+			if (OverlapActive) modifiers.FinalDamage *= OverlapDamageMultiplier;
 		}
 
 		internal void RecordDps(NPC target, int damage)
@@ -88,43 +145,19 @@ namespace SpectesGaze.Content.Players
 				Player.addDPS(damage);
 		}
 
-		internal void ApplyEchoHits(NPC target, NPC.HitInfo hit, int damageDone)
+		private void SyncAwakenedDomain()
 		{
-			if (applyingEchoHits || !Equipped || !DomainOn || Player.dead || Player.whoAmI != Main.myPlayer
-				|| damageDone <= 0 || hit.InstantKill || (target.friendly && target.type != NPCID.TargetDummy)) return;
+			if (Main.netMode != NetmodeID.MultiplayerClient || Player.whoAmI != Main.myPlayer) return;
+			bool active = FullyAwakened;
+			if (active == sentAwakenedDomain) return;
+			sentAwakenedDomain = active;
+			((SpectesGaze)Mod).SendAwakenedDomain(Player.whoAmI, active);
+		}
 
-			int tier = CalculateTier();
-			int extraHits = AttackHitCount(tier) - 1;
-			if (extraHits == 0) return;
-
-			// 回响沿用已经结算过的伤害，不重新扣防御，也不重复触发武器特效。
-			hit.Knockback = 0f;
-			hit.HideCombatText = true;
-			int targetType = target.type;
-			int landed = 0;
-			applyingEchoHits = true;
-			try
-			{
-				for (int i = 0; i < extraHits; i++)
-				{
-					if (!target.active || target.life <= 0 || target.type != targetType
-						|| target.dontTakeDamage) break;
-
-					// 稻草人可以正常受击，StrikeNPC 会保留它的 immortal 状态。
-					int damage = target.StrikeNPC(hit);
-					if (damage <= 0) break;
-
-					if (Main.netMode == NetmodeID.MultiplayerClient) NetMessage.SendStrikeNPC(target, hit);
-					RecordDps(target, damage);
-					landed++;
-				}
-			}
-			finally
-			{
-				applyingEchoHits = false;
-			}
-
-			if (landed > 0) GhosteyeEffects.EchoHit(target.Center, target.Size, tier >= AwakenedTier);
+		internal void ReceiveAwakenedDomain(bool active)
+		{
+			remoteAwakenedDomain = active;
+			if (!active) ReceivePermanentOverlap(false);
 		}
 
 		public override bool ImmuneTo(PlayerDeathReason damageSource, int cooldownCounter, bool dodgeable) => FullyAwakened;
@@ -140,16 +173,32 @@ namespace SpectesGaze.Content.Players
 
 		public override bool PreKill(double damage, int hitDirection, bool pvp, ref bool playSound, ref bool genDust, ref PlayerDeathReason damageSource)
 		{
-			if (!FullyAwakened) return true;
+			if (!ProtectsFromDeath) return true;
+			RestoreFromDeath();
+			return false;
+		}
 
+		internal void RestoreFromDeath()
+		{
+			bool lifeChanged = Player.dead || Player.statLife != Player.statLifeMax2 || Player.statMana != Player.statManaMax2;
+			Player.dead = false;
+			Player.respawnTimer = 0;
 			Player.statLife = Math.Max(1, Player.statLifeMax2);
 			Player.statMana = Player.statManaMax2;
 			Player.breath = Player.breathMax;
 			Player.lifeRegenCount = 0;
 			ClearDebuffs();
+			if (lifeChanged && (Main.netMode == NetmodeID.Server
+				|| (Main.netMode == NetmodeID.MultiplayerClient && Player.whoAmI == Main.myPlayer)))
+			{
+				NetMessage.SendData(MessageID.PlayerLifeMana, number: Player.whoAmI);
+				NetMessage.SendData(MessageID.PlayerMana, number: Player.whoAmI);
+			}
+
+			if (Main.dedServ || (lastRebirthTick != 0 && Main.GameUpdateCount - lastRebirthTick < 20)) return;
+			lastRebirthTick = Main.GameUpdateCount;
 			GhosteyeEffects.Rebirth(Player.Center);
 			SoundEngine.PlaySound(SoundID.Item4 with { Volume = 0.85f, Pitch = -0.8f }, Player.Center);
-			return false;
 		}
 	}
 }

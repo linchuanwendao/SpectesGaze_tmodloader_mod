@@ -40,7 +40,7 @@ namespace SpectesGaze.Content.Systems
 
 			float phase = EdgePulsePhase;
 			EmitPulseSparks(center, radius, time, phase, 1f, tint, fade);
-			float overlap = OverlapOpacity(player.GetModPlayer<GhosteyePlayer>().OverlapTime);
+			float overlap = OverlapOpacity(player);
 			if (tier >= GhosteyePlayer.OverlapTier && overlap > 0.08f)
 			{
 				EmitPulseSparks(OverlapEdgeCenter(center, radius, time), radius * 0.81f, -time * 0.79f, -phase,

@@ -43,8 +43,15 @@ namespace SpectesGaze.Content.Players
 
 		public override void SyncPlayer(int toWho, int fromWho, bool newPlayer)
 		{
-			if (Main.netMode == NetmodeID.Server && BloodFlightActive)
-				((SpectesGaze)Mod).SendBloodFlight(Player.whoAmI, true, toWho, fromWho);
+			if (Main.netMode != NetmodeID.Server) return;
+			SpectesGaze mod = (SpectesGaze)Mod;
+			if (BloodFlightActive) mod.SendBloodFlight(Player.whoAmI, true, toWho, fromWho);
+			if (FullyAwakened)
+			{
+				mod.SendAwakenedDomain(Player.whoAmI, true, toWho, fromWho);
+				if (OverlapActive) mod.SendPermanentOverlap(Player.whoAmI, true, toWho, fromWho);
+			}
+			else if (OverlapActive) mod.SendTimedOverlap(Player.whoAmI, true, toWho, fromWho);
 		}
 
 		public override void PreUpdateMovement()
@@ -77,9 +84,13 @@ namespace SpectesGaze.Content.Players
 
 		public override void HideDrawLayers(PlayerDrawSet drawInfo)
 		{
-			if (!BloodFlightActive || Player.dead) return;
+			bool overlap = OverlapActive;
+			if (Player.dead || drawInfo.headOnlyRender || (!BloodFlightActive && !overlap)) return;
 			foreach (PlayerDrawLayer layer in PlayerDrawLayerLoader.Layers)
+			{
+				if (overlap && !BloodFlightActive && layer == PlayerDrawLayers.HeldItem) continue;
 				layer.Hide();
+			}
 		}
 	}
 }

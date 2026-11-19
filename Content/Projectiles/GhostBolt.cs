@@ -38,7 +38,7 @@ namespace SpectesGaze.Content.Projectiles
 
 			// 轻微追踪：找到最近的敌人，每帧把方向往它偏一点。
 			// 转向角度很小，不会变成制导导弹，只是让远距离不至于完全打空。
-			NPC target = FindTarget();
+			NPC target = Projectile.ai[0] == 0f ? FindTarget() : null;
 			if (target != null)
 			{
 				Vector2 desired = (target.Center - Projectile.Center).SafeNormalize(Projectile.velocity);

@@ -21,6 +21,8 @@ namespace SpectesGaze.Content.Players
 	/// </summary>
 	public partial class GhosteyePlayer : ModPlayer
 	{
+		internal const int FloatingEyeTier = 3;
+
 		// ================= 装备状态 =================
 
 		/// <summary>是否已经吞噬鬼眼。一旦为 true 永久锁死，没有取下逻辑。</summary>
@@ -76,6 +78,8 @@ namespace SpectesGaze.Content.Players
 
 		// 被动小激光的发射计时，累计到阈值就打一发。
 		private int boltTimer;
+		private bool WeaponAttackHeld => Player.controlUseItem && !Player.noItems && !Player.CCed
+			&& !Player.mouseInterface && !Player.dead && Player.HeldItem.damage > 0;
 
 		/// <summary>兼容旧名字，UI 和渲染器都读这个。</summary>
 		public bool DomainActive => DomainOn;
@@ -129,6 +133,8 @@ namespace SpectesGaze.Content.Players
 
 		public override void PostUpdate()
 		{
+			if (OverlapTime == 1) SetTimedOverlap(false);
+			else if (OverlapTime > 1) OverlapTime--;
 			if (!Equipped) return;
 
 			if (DomainCooldown > 0) DomainCooldown--;
@@ -159,9 +165,9 @@ namespace SpectesGaze.Content.Players
 			}
 			lastTier = tier;
 
-			// 第五层起：鬼域开启时，头顶鬼眼自动攻击范围内的敌人。
-			// 这部分不消耗复苏值，所以给了独立的 0.75 秒间隔，避免白嫖输出过高。
-			if (DomainOn && tier >= 5 && Player.whoAmI == Main.myPlayer)
+			// 九层起，浮眼配合玩家持武器攻击，松开攻击键就停射。
+			if (DomainOn && tier >= 5 && Player.whoAmI == Main.myPlayer
+				&& (tier < OverlapTier || (WeaponAttackHeld && (Player.ItemAnimationActive || Player.channel))))
 			{
 				boltTimer++;
 				if (boltTimer >= 45)
@@ -195,12 +201,6 @@ namespace SpectesGaze.Content.Players
 
 			// 复苏值带来的输出加成。
 			if (tier < AwakenedTier) Player.GetDamage(DamageClass.Generic) += RevivalDamageBonus;
-
-			// 第三层起获得"看见灵异"：透视敌人，等同于猎人药水。
-			if (tier >= 3)
-			{
-				Player.detectCreature = true;
-			}
 		}
 
 		/// <summary>
@@ -232,7 +232,7 @@ namespace SpectesGaze.Content.Players
 
 		private void EmitWeaponHitSparks(NPC target, Vector2 direction, NPC.HitInfo hit, int damageDone)
 		{
-			if (Main.dedServ || !Equipped || applyingEchoHits || damageDone <= 0 || Player.whoAmI != Main.myPlayer) return;
+			if (Main.dedServ || !Equipped || damageDone <= 0 || Player.whoAmI != Main.myPlayer) return;
 
 			Vector2 heading = direction.SafeNormalize(new Vector2(Player.direction, 0f));
 			float inset = Math.Min(18f, Math.Min(target.width, target.height) * 0.36f);
@@ -270,6 +270,13 @@ namespace SpectesGaze.Content.Players
 			if (Player.whoAmI != Main.myPlayer) return;
 			if (!Equipped) return;
 
+			bool toggleDomain = SpectesGaze.GazeKey?.JustPressed == true;
+			if (toggleDomain && DomainOn)
+			{
+				CloseDomain(false);
+				return;
+			}
+
 			GhosteyeUI ui = ModContent.GetInstance<GhosteyeUI>();
 			if (SpectesGaze.GuideKey?.JustPressed == true)
 			{
@@ -278,18 +285,7 @@ namespace SpectesGaze.Content.Players
 			}
 			if (ui.GuideOpen) return;
 
-			// 一个键既是开也是关。
-			if (SpectesGaze.GazeKey != null && SpectesGaze.GazeKey.JustPressed)
-			{
-				if (DomainOn)
-				{
-					CloseDomain(false);
-				}
-				else
-				{
-					TryOpenDomain();
-				}
-			}
+			if (toggleDomain) TryOpenDomain();
 
 			if (SpectesGaze.BloodFlightKey?.JustPressed == true)
 				ToggleBloodFlight();
@@ -327,7 +323,7 @@ namespace SpectesGaze.Content.Players
 				TryRewindDomain();
 			}
 
-			if (SpectesGaze.OverlapKey?.JustPressed == true && DomainOn && CalculateTier() >= OverlapTier)
+			if (DomainOn && CalculateTier() >= OverlapTier && SpectesGaze.OverlapKey?.JustPressed == true)
 			{
 				TryOverlapDomain();
 			}
@@ -453,9 +449,27 @@ namespace SpectesGaze.Content.Players
 		}
 
 		/// <summary>
-		/// 被动小激光。找鬼域范围内最近的敌人打一发。
+		/// 浮眼小激光。五至八层索敌，九层起跟随玩家准星。
 		/// </summary>
 		private void FireBolt(int tier)
+		{
+			Vector2 origin = FloatingEyeCenter;
+			Vector2 aim = Main.MouseWorld;
+			if (tier < OverlapTier)
+			{
+				NPC target = FindBoltTarget(tier);
+				if (target == null) return;
+				aim = target.Center;
+			}
+
+			Vector2 dir = (aim - origin).SafeNormalize(new Vector2(Player.direction, 0f));
+			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(25f + tier * 8f);
+			Projectile.NewProjectile(Player.GetSource_FromThis(), origin, dir * 14f,
+				ModContent.ProjectileType<Projectiles.GhostBolt>(), damage, 0f, Player.whoAmI,
+				ai0: tier >= OverlapTier ? 1f : 0f);
+		}
+
+		private NPC FindBoltTarget(int tier)
 		{
 			float radius = DomainRadiusOf(tier);
 			float bestDist = radius * radius;
@@ -474,20 +488,7 @@ namespace SpectesGaze.Content.Players
 				}
 			}
 
-			if (target == null) return;
-
-			Vector2 origin = FloatingEyeCenter;
-			Vector2 dir = (target.Center - origin).SafeNormalize(Vector2.UnitX);
-			int damage = (int)Player.GetTotalDamage(DamageClass.Generic).ApplyTo(25f + tier * 8f);
-
-			Projectile.NewProjectile(
-				Player.GetSource_FromThis(),
-				origin,
-				dir * 14f,
-				ModContent.ProjectileType<Projectiles.GhostBolt>(),
-				damage,
-				0f,
-				Player.whoAmI);
+			return target;
 		}
 
 		/// <summary>
@@ -559,6 +560,7 @@ namespace SpectesGaze.Content.Players
 			}
 
 			DomainOn = true;
+			SyncAwakenedDomain();
 
 			// 开启瞬间：范围内所有敌人挂上凝视。
 			float radius = DomainRadiusOf(tier);
@@ -582,8 +584,20 @@ namespace SpectesGaze.Content.Players
 		private void CloseDomain(bool overflowed)
 		{
 			DomainOn = false;
+			SyncAwakenedDomain();
 			SetBloodFlight(false);
-			OverlapTime = 0;
+			StopOverlap();
+			boltTimer = 0;
+			Player.ClearBuff(ModContent.BuffType<GazeDomain>());
+			if (Player.whoAmI == Main.myPlayer)
+			{
+				ModContent.GetInstance<DomainGrab>().HandleInput(Player, domainOn: false);
+				foreach (Projectile projectile in Main.ActiveProjectiles)
+				{
+					if (projectile.owner == Player.whoAmI && projectile.ModProjectile is Projectiles.GhostBolt or Projectiles.GhostBeam)
+						projectile.Kill();
+				}
+			}
 			int tier = CalculateTier();
 			GhosteyeEffects.Close(Player.Center, DomainRadiusOf(tier), overflowed);
 			if (!overflowed) return;
@@ -679,8 +693,14 @@ namespace SpectesGaze.Content.Players
 
 		public override void OnEnterWorld()
 		{
+			DomainOn = false;
+			OverlapTime = boltTimer = 0;
+			permanentOverlap = false;
+			SirenCurseCleared = false;
 			BloodFlightActive = false;
 			bloodFlightVelocity = Vector2.Zero;
+			remoteAwakenedDomain = sentAwakenedDomain = false;
+			lastRebirthTick = 0;
 			Revival = Math.Clamp(Revival, 0f, RevivalLimitOf(CalculateTier()));
 		}
 

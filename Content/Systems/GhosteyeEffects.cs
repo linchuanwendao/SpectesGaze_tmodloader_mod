@@ -138,19 +138,6 @@ namespace SpectesGaze.Content.Systems
 			Burst(center, WetBlood, 16, 5f);
 		}
 
-		internal static void EchoHit(Vector2 center, Vector2 size, bool awakened)
-		{
-			if (Main.dedServ || Effects.Count >= MaxEffects - 26 || !NearScreen(center)) return;
-
-			float reach = Math.Clamp(Math.Max(size.X, size.Y) * 0.40f, 15f, 47f);
-			for (int i = 0; i < 2; i++)
-			{
-				Vector2 offset = new(Range(-14f, 15f), Range(-14f, 12f));
-				Wound(center + offset, reach * Range(1.4f, 2f), reach * 0.8f, awakened ? Pale : WetBlood, VisualRandom.Next(11, 18));
-			}
-			Burst(center, DriedBlood, 3, 4f);
-		}
-
 		internal static void Rebirth(Vector2 center)
 		{
 			Wound(center + new Vector2(8f, -9f), 89f, 14f, Pale, 22);

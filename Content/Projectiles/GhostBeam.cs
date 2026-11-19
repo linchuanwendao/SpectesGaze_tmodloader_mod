@@ -17,13 +17,14 @@ namespace SpectesGaze.Content.Projectiles
 		public const float MaxLength = 1600f;
 
 		/// <summary>光束的基准视觉厚度。</summary>
-		public const float Thickness = 80f;
+		public const float Thickness = 124f;
 
 		/// <summary>持续帧数。90 帧 = 1.5 秒。</summary>
 		public const int Duration = 90;
 		private Vector2 lastSyncedAim;
 
-		internal readonly record struct FiringEye(Vector2 Aim, float Size, float Opening, float Rotation, Vector2 PupilOffset);
+		internal readonly record struct FiringEye(Vector2 Aim, float Size, float Opening, float Rotation, Vector2 PupilOffset,
+			float BeamOpacity);
 
 		internal static FiringEye GetFiringEye(Projectile beam, int tier)
 		{
@@ -33,7 +34,8 @@ namespace SpectesGaze.Content.Projectiles
 			float size = (44f + tier * 3f) * (1f + tension * 0.16f);
 			float opening = 1f + tension * (0.62f + 0.04f * MathF.Sin(age * 0.44f));
 			float reach = MathHelper.Lerp(0.12f, 0.19f, MathF.Abs(aim.X));
-			return new FiringEye(aim, size, opening, aim.X * aim.Y * 0.30f, aim * (reach * size));
+			float opacity = MathHelper.Clamp(Math.Min(age / 4f, (Duration - age) / 12f), 0f, 1f);
+			return new FiringEye(aim, size, opening, aim.X * aim.Y * 0.30f, aim * (reach * size), opacity);
 		}
 
 		public override string Texture => "SpectesGaze/Content/Projectiles/GhostBeam";
@@ -133,13 +135,14 @@ namespace SpectesGaze.Content.Projectiles
 				if (!Collision.CheckAABBvLineCollision(npc.position, npc.Size, start, end)) continue;
 
 				int dir = aim.X > 0f ? 1 : -1;
-				NPC.HitInfo hit = npc.CalculateHitInfo(Projectile.damage, dir);
+				NPC.HitModifiers modifiers = npc.GetIncomingStrikeModifiers(DamageClass.Default, dir);
+				eye.ModifyHitNPC(npc, ref modifiers);
+				NPC.HitInfo hit = modifiers.ToHitInfo(Projectile.damage, false, 0f, false, 0f);
 				int damageDone = npc.StrikeNPC(hit);
 				if (Main.netMode != NetmodeID.SinglePlayer) NetMessage.SendStrikeNPC(npc, hit);
 				npc.immune[Projectile.owner] = 8;
 
 				eye.RecordDps(npc, damageDone);
-				eye.ApplyEchoHits(npc, hit, damageDone);
 				GhosteyeEffects.Impact(npc.Center, beam: true);
 				if (!Main.dedServ && damageDone > 0)
 				{

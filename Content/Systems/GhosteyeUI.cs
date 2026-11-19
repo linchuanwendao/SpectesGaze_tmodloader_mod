@@ -168,6 +168,13 @@ namespace SpectesGaze.Content.Systems
 
 		private static int Seconds(int ticks) => (ticks + 59) / 60;
 
+		private static string OverlapStatus(GhosteyePlayer eye, int tier)
+		{
+			if (!eye.OverlapActive) return null;
+			string multiplier = $"×{GhosteyePlayer.OverlapDamageMultiplier}";
+			return tier >= GhosteyePlayer.AwakenedTier ? multiplier : $"{multiplier} · {Seconds(eye.OverlapTime)}s";
+		}
+
 		private static void DrawHud(Canvas art, GhosteyePlayer eye, int tier, Point mouse)
 		{
 			art.Frame(new Rectangle(0, 0, HudWidth, HudHeight), compact: true);
@@ -208,8 +215,7 @@ namespace SpectesGaze.Content.Systems
 				Slot(3, "RewindShort", eye.RewindCooldown, status);
 			}
 			if (tier >= GhosteyePlayer.OverlapTier)
-				Slot(4, "OverlapShort", eye.OverlapCooldown,
-					eye.OverlapTime > 0 ? $"×{eye.AttackHitCount(tier)} · {Seconds(eye.OverlapTime)}s" : null);
+				Slot(4, "OverlapShort", eye.OverlapCooldown, OverlapStatus(eye, tier));
 
 			void Slot(int index, string label, int cooldown, string status = null)
 			{
