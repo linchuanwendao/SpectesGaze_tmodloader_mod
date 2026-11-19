@@ -56,9 +56,7 @@ Keybinds: {
 	GhosteyeGuide.DisplayName: 鬼眼技能说明
 }
 
-RecipeGroups: {
-	EvilMaterials: 腐肉或椎骨
-}
+RecipeGroups.EvilMaterials: 腐肉或椎骨
 
 RevivalMessages: {
 	Overflow: 复苏值溢满，鬼眼强行闭合。
@@ -113,6 +111,7 @@ GhosteyeUI: {
 				溢满时失去最大生命值的 20%，鬼眼闭合 30 秒。
 				'''
 		}
+
 		Teleport: {
 			Name: 域内瞬移
 			Effect:
@@ -122,6 +121,7 @@ GhosteyeUI: {
 				成功传送增加 3 点复苏值。十层免消耗。
 				'''
 		}
+
 		Grab: {
 			Name: 鬼域抓取
 			Effect:
@@ -132,6 +132,7 @@ GhosteyeUI: {
 				实体方块会阻挡拖动，目标会停在鬼域边界内。
 				'''
 		}
+
 		BloodFlight: {
 			Name: 化虹
 			Effect:
@@ -141,13 +142,12 @@ GhosteyeUI: {
 				化虹不额外消耗复苏值，鬼域仍会照常积累复苏值。
 				'''
 		}
+
 		Sight: {
 			Name: 窥探真实
-			Effect:
-				'''
-				开域时，悬浮鬼眼会在角色头顶显形。
-				'''
+			Effect: 开域时，悬浮鬼眼会在角色头顶显形。
 		}
+
 		Flame: {
 			Name: 鬼火
 			Effect:
@@ -157,6 +157,7 @@ GhosteyeUI: {
 				七层起每秒造成 150 伤害。
 				'''
 		}
+
 		Bolt: {
 			Name: 溅血
 			Effect:
@@ -166,6 +167,7 @@ GhosteyeUI: {
 				光弹免复苏值消耗。
 				'''
 		}
+
 		Beam: {
 			Name: 湮灭
 			Effect:
@@ -175,6 +177,7 @@ GhosteyeUI: {
 				基础消耗为 8 点复苏值，超过五层后递减。
 				'''
 		}
+
 		Still: {
 			Name: 静止
 			Effect:
@@ -184,6 +187,7 @@ GhosteyeUI: {
 				冷却 30 秒，基础消耗为 12 点复苏值。
 				'''
 		}
+
 		Restart: {
 			Name: 重启自身
 			Effect:
@@ -193,6 +197,7 @@ GhosteyeUI: {
 				基础消耗为 18 点复苏值，超过七层后递减。
 				'''
 		}
+
 		Rewind: {
 			Name: 大范围重启
 			Effect:
@@ -202,6 +207,7 @@ GhosteyeUI: {
 				冷却 30 秒，基础消耗为 25 点复苏值。
 				'''
 		}
+
 		Overlap: {
 			Name: 鬼域叠加
 			Effect:
@@ -211,6 +217,7 @@ GhosteyeUI: {
 				十层开域后按键切换叠加，无时限，关域时解除。
 				'''
 		}
+
 		Awaken: {
 			Name: 死机
 			Effect:

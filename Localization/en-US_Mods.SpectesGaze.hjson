@@ -56,9 +56,7 @@ Keybinds: {
 	GhosteyeGuide.DisplayName: Ghosteye Skill Guide
 }
 
-RecipeGroups: {
-	EvilMaterials: Rotten Chunks or Vertebrae
-}
+RecipeGroups.EvilMaterials: Rotten Chunks or Vertebrae
 
 RevivalMessages: {
 	Overflow: Revival overflowed, forcing the Ghosteye shut.
@@ -113,6 +111,7 @@ GhosteyeUI: {
 				At the cap, lose 20% of max life and the eye closes for 30s.
 				'''
 		}
+
 		Teleport: {
 			Name: Domain Teleport
 			Effect:
@@ -122,6 +121,7 @@ GhosteyeUI: {
 				Successful teleports add 3 Revival. Tier 10 removes the cost.
 				'''
 		}
+
 		Grab: {
 			Name: Domain Grab
 			Effect:
@@ -132,6 +132,7 @@ GhosteyeUI: {
 				Release the key to drop the target. Solid tiles block dragging.
 				'''
 		}
+
 		BloodFlight: {
 			Name: Blood Flight
 			Effect:
@@ -141,13 +142,12 @@ GhosteyeUI: {
 				Flight adds no Revival cost. The open domain still builds Revival as usual.
 				'''
 		}
+
 		Sight: {
 			Name: Spirit Sight
-			Effect:
-				'''
-				The floating eye appears overhead when the domain opens.
-				'''
+			Effect: The floating eye appears overhead when the domain opens.
 		}
+
 		Flame: {
 			Name: Ghostflame
 			Effect:
@@ -157,6 +157,7 @@ GhosteyeUI: {
 				Tier 7 and higher deal 150 damage per second.
 				'''
 		}
+
 		Bolt: {
 			Name: Ghosteye Bolt
 			Effect:
@@ -166,6 +167,7 @@ GhosteyeUI: {
 				The bolt costs no Revival.
 				'''
 		}
+
 		Beam: {
 			Name: Ghosteye Beam
 			Effect:
@@ -175,6 +177,7 @@ GhosteyeUI: {
 				Base Revival cost is 8 and decreases above tier 5.
 				'''
 		}
+
 		Still: {
 			Name: Freeze Domain
 			Effect:
@@ -184,6 +187,7 @@ GhosteyeUI: {
 				Cooldown is 30 seconds. Base Revival cost is 12.
 				'''
 		}
+
 		Restart: {
 			Name: Restart Self
 			Effect:
@@ -193,6 +197,7 @@ GhosteyeUI: {
 				Base Revival cost is 18 and decreases above tier 7.
 				'''
 		}
+
 		Rewind: {
 			Name: Rewind Domain
 			Effect:
@@ -202,6 +207,7 @@ GhosteyeUI: {
 				Cooldown is 30 seconds. Base Revival cost is 25.
 				'''
 		}
+
 		Overlap: {
 			Name: Domain Overlap
 			Effect:
@@ -211,6 +217,7 @@ GhosteyeUI: {
 				At tier 10, toggle overlap with the key. It lasts until toggled off or the domain closes.
 				'''
 		}
+
 		Awaken: {
 			Name: Fully Awakened
 			Effect:

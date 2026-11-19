@@ -62,6 +62,7 @@ namespace SpectesGaze
 		private const byte AwakenedDomainPacket = 2;
 		private const byte TimedOverlapPacket = 3;
 		private const byte PermanentOverlapPacket = 4;
+		private const byte SirenCurseClearedPacket = 5;
 
 		internal void SendBloodFlight(int player, bool active, int toWho = -1, int ignoreWho = -1) =>
 			SendPlayerToggle(BloodFlightPacket, player, active, toWho, ignoreWho);
@@ -75,6 +76,9 @@ namespace SpectesGaze
 		internal void SendPermanentOverlap(int player, bool active, int toWho = -1, int ignoreWho = -1) =>
 			SendPlayerToggle(PermanentOverlapPacket, player, active, toWho, ignoreWho);
 
+		internal void SendSirenCurseCleared(int player, int toWho = -1, int ignoreWho = -1) =>
+			SendPlayerToggle(SirenCurseClearedPacket, player, true, toWho, ignoreWho);
+
 		private void SendPlayerToggle(byte kind, int player, bool active, int toWho, int ignoreWho)
 		{
 			ModPacket packet = GetPacket();
@@ -87,7 +91,7 @@ namespace SpectesGaze
 		public override void HandlePacket(BinaryReader reader, int whoAmI)
 		{
 			byte kind = reader.ReadByte();
-			if (kind is not (BloodFlightPacket or AwakenedDomainPacket or TimedOverlapPacket or PermanentOverlapPacket)) return;
+			if (kind is not (BloodFlightPacket or AwakenedDomainPacket or TimedOverlapPacket or PermanentOverlapPacket or SirenCurseClearedPacket)) return;
 			int playerIndex = reader.ReadByte();
 			bool active = reader.ReadBoolean();
 			bool server = Main.netMode == NetmodeID.Server;
@@ -99,7 +103,7 @@ namespace SpectesGaze
 			bool tierAllowed = kind switch
 			{
 				BloodFlightPacket => tier >= GhosteyePlayer.BloodFlightTier,
-				AwakenedDomainPacket or PermanentOverlapPacket => tier >= GhosteyePlayer.AwakenedTier,
+				AwakenedDomainPacket or PermanentOverlapPacket or SirenCurseClearedPacket => tier >= GhosteyePlayer.AwakenedTier,
 				_ => tier == GhosteyePlayer.OverlapTier
 			};
 			if (active && (!player.active || player.dead || !tierAllowed)) return;
@@ -110,6 +114,11 @@ namespace SpectesGaze
 				eye.ReceiveAwakenedDomain(active);
 			else if (kind == TimedOverlapPacket)
 				eye.ReceiveTimedOverlap(active);
+			else if (kind == SirenCurseClearedPacket)
+			{
+				if (!active || (server && !eye.ProtectsFromDeath)) return;
+				eye.SirenCurseCleared = true;
+			}
 			else
 				eye.ReceivePermanentOverlap(active);
 			if (server) SendPlayerToggle(kind, playerIndex, active, -1, whoAmI);

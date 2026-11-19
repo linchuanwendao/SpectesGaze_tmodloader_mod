@@ -46,6 +46,7 @@ namespace SpectesGaze.Content.Players
 			if (Main.netMode != NetmodeID.Server) return;
 			SpectesGaze mod = (SpectesGaze)Mod;
 			if (BloodFlightActive) mod.SendBloodFlight(Player.whoAmI, true, toWho, fromWho);
+			if (SirenCurseCleared) mod.SendSirenCurseCleared(Player.whoAmI, toWho, fromWho);
 			if (FullyAwakened)
 			{
 				mod.SendAwakenedDomain(Player.whoAmI, true, toWho, fromWho);

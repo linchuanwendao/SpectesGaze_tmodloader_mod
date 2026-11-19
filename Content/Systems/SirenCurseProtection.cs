@@ -16,10 +16,9 @@ namespace SpectesGaze.Content.Systems
 
 		private Hook deathHook;
 		private Hook updateHook;
-		private MethodInfo clearCurse;
-		private Action<Player> stopMusicBoxes;
-		private Func<bool> worldIsResolving;
-		private FieldInfo isCursed;
+		private Hook musicHook;
+		private Action stopSession;
+		private Func<bool> sessionActive;
 
 		public override void PostSetupContent()
 		{
@@ -28,46 +27,50 @@ namespace SpectesGaze.Content.Systems
 			Type systemType = overhaul.Code.GetType(ToolsNamespace + "SirenMusicalSystem");
 			MethodInfo executeDeath = playerType?.GetMethod("ExecuteDeath", InstanceMethods, Type.EmptyTypes);
 			MethodInfo preUpdate = playerType?.GetMethod(nameof(ModPlayer.PreUpdate), InstanceMethods, Type.EmptyTypes);
-			clearCurse = playerType?.GetMethod("ClearCurse", InstanceMethods, new[] { typeof(bool) });
-			isCursed = playerType?.GetField("IsCursed", InstanceMethods);
-			MethodInfo stopBoxes = playerType?.GetMethod("StopAllMusicBoxes", StaticMethods, new[] { typeof(Player) });
-			MethodInfo resolving = systemType?.GetProperty("ResolveDeath", StaticMethods)?.GetGetMethod(nonPublic: true);
-			if (executeDeath == null || preUpdate == null || clearCurse == null || isCursed?.FieldType != typeof(bool)
-				|| stopBoxes == null || resolving == null)
+			MethodInfo stop = systemType?.GetMethod("RequestForceStop", StaticMethods, Type.EmptyTypes);
+			MethodInfo active = systemType?.GetProperty("Active", StaticMethods)?.GetGetMethod(nonPublic: true);
+			if (executeDeath == null || preUpdate == null || stop == null || active == null)
 			{
 				Mod.Logger.Warn("Calamity Overhaul's Siren Musical Box curse methods could not be resolved.");
 				return;
 			}
 
-			stopMusicBoxes = stopBoxes.CreateDelegate<Action<Player>>();
-			worldIsResolving = resolving.CreateDelegate<Func<bool>>();
-			// Detours need the concrete instance type, which belongs to the optional mod.
-			MethodInfo install = typeof(SirenCurseProtection).GetMethod(nameof(InstallHooks), InstanceMethods);
 			try
 			{
-				install.MakeGenericMethod(playerType).Invoke(this, new object[] { executeDeath, preUpdate });
+				stopSession = stop.CreateDelegate<Action>();
+				sessionActive = active.CreateDelegate<Func<bool>>();
+				deathHook = new Hook(executeDeath, (Action<Action<ModPlayer>, ModPlayer>)ExecuteDeath);
+				updateHook = new Hook(preUpdate, (Action<Action<ModPlayer>, ModPlayer>)PreUpdateCurse);
 			}
-			catch (TargetInvocationException ex)
+			catch (Exception ex)
 			{
 				Unload();
-				Mod.Logger.Warn("Could not install Siren Musical Box curse protection.", ex.InnerException);
+				Mod.Logger.Warn("Could not install Siren Musical Box curse protection.", ex);
+				return;
 			}
-		}
 
-		private void InstallHooks<T>(MethodInfo executeDeath, MethodInfo preUpdate) where T : ModPlayer
-		{
-			deathHook = new Hook(executeDeath, (Action<Action<T>, T>)ExecuteDeath);
-			updateHook = new Hook(preUpdate, (Action<Action<T>, T>)PreUpdateCurse);
+			MethodInfo shouldPlay = overhaul.Code.GetType(ToolsNamespace + "SirenMusicClaim")
+				?.GetMethod("ShouldPlay", InstanceMethods, Type.EmptyTypes);
+			if (Main.dedServ || shouldPlay?.ReturnType != typeof(bool)) return;
+			try
+			{
+				musicHook = new Hook(shouldPlay, (Func<Func<object, bool>, object, bool>)ShouldPlayMusic);
+			}
+			catch (Exception ex)
+			{
+				Mod.Logger.Warn("Could not suppress the Siren Musical Box track for a cleansed listener.", ex);
+			}
 		}
 
 		public override void Unload()
 		{
+			musicHook?.Dispose();
 			updateHook?.Dispose();
 			deathHook?.Dispose();
-			updateHook = deathHook = null;
+			musicHook = updateHook = deathHook = null;
 		}
 
-		private void ExecuteDeath<T>(Action<T> orig, T siren) where T : ModPlayer
+		private void ExecuteDeath(Action<ModPlayer> orig, ModPlayer siren)
 		{
 			Player player = siren.Player;
 			if (!player.active || player.dead || !player.TryGetModPlayer(out GhosteyePlayer eye) || !eye.ProtectsFromDeath)
@@ -76,40 +79,39 @@ namespace SpectesGaze.Content.Systems
 				return;
 			}
 
-			eye.RestoreFromDeath();
-			eye.SirenCurseCleared = worldIsResolving();
-			isCursed.SetValue(siren, false);
+			// 个人倒计时可能先于世界进入结算。单人直接结束本轮播放，防止下一帧重新附咒。
+			if (Main.netMode == NetmodeID.SinglePlayer)
+				stopSession();
 
-			if (Main.netMode == NetmodeID.SinglePlayer && eye.SirenCurseCleared)
-				stopMusicBoxes(player);
-			else
-				clearCurse.Invoke(siren, new object[] { true });
+			// 八音盒自己的复活回调同时清除存档诅咒、倒计时、IsCursed 和死亡触发标记。
+			siren.OnRespawn();
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+			{
+				eye.SirenCurseCleared = sessionActive();
+				if (eye.SirenCurseCleared)
+					((SpectesGaze)Mod).SendSirenCurseCleared(player.whoAmI);
+				siren.SyncPlayer(toWho: -1, fromWho: -1, newPlayer: false);
+			}
+			eye.RestoreFromDeath();
 		}
 
-		private void PreUpdateCurse<T>(Action<T> orig, T siren) where T : ModPlayer
+		private void PreUpdateCurse(Action<ModPlayer> orig, ModPlayer siren)
 		{
-			Player player = siren.Player;
-			if (!player.TryGetModPlayer(out GhosteyePlayer eye))
+			if (siren.Player.TryGetModPlayer(out GhosteyePlayer eye) && eye.SirenCurseCleared)
 			{
-				orig(siren);
-				return;
+				// 同步包也可能带回旧诅咒。直到这轮播放结束，只清理这个已免死的玩家。
+				siren.OnRespawn();
+				if (sessionActive()) return;
+				eye.SirenCurseCleared = false;
 			}
-
-			if (!worldIsResolving()) eye.SirenCurseCleared = false;
-			// 客户端结算自己的代码杀，其他端停止给已经保护的玩家续上同一轮诅咒。
-			else if (!eye.SirenCurseCleared && player.whoAmI != Main.myPlayer && eye.ProtectsFromDeath)
-			{
-				clearCurse.Invoke(siren, new object[] { false });
-				eye.SirenCurseCleared = true;
-			}
-
-			if (eye.SirenCurseCleared)
-			{
-				isCursed.SetValue(siren, false);
-				return;
-			}
-
 			orig(siren);
+		}
+
+		private static bool ShouldPlayMusic(Func<object, bool> orig, object claim)
+		{
+			if (Main.LocalPlayer is { active: true } player && player.TryGetModPlayer(out GhosteyePlayer eye) && eye.SirenCurseCleared)
+				return false;
+			return orig(claim);
 		}
 	}
 }
